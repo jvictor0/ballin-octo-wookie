@@ -107,6 +107,12 @@ class DependTree:
             if not change:
                 break
         return self # cause why not
+
+    def ToDict(self):
+        return {
+            "data" : self.data,
+            "children" : [{"arctype" : c1, "child" : c2} for c1,c2 in self.children]
+            }
     
 def CHECK(a):
     if not a:
@@ -191,6 +197,13 @@ def AdvmodAsObjRW(t):
     t.Postpend(-1, advmod)
     return t
 
+def AdvmodPassiveRW(t):
+    advmod = t.Find("advmod")
+    pas = t.Find("nsubjpass")
+    CHECK(t.Child(advmod).IsLeaf())
+    t.Prepend(-1, advmod)
+    return t
+
 def PossRW(t):
     l = t.Find("poss")
     CHECK(t.Child(l).IsLeaf())
@@ -200,10 +213,14 @@ def PossRW(t):
     return t
 
 
-def br(typ, pre):
+def br(typ, pre, prefix=None,suffix=None):
     def f(t):
         l = t.Find(typ)
         CHECK(t.Child(l).IsLeaf())
+        if not prefix is None:
+            t.children[l][1].data = prefix + t.ChildStr(l)
+        if not suffix is None:
+            t.children[l][1].data = t.ChildStr(l) + suffix
         t.Pend(-1, l, pre)
         return t
     return f
@@ -215,18 +232,19 @@ Rules = [
     br("nn", True),
     br("amod", True),
     br("num", True),
+    AdvmodPassiveRW,
     AdvmodAsObjRW,
     br("advmod", True),
     br("det", True),
     br("predet", True),
     br("prt", False),
     PossRW,
-    br("vmod", False),
     br("dep",False),
 #    CompSentRW,
     br("iobj",False),
     br("dobj",False),
     br("pobj",False),
+    br("vmod", False),
     ConjRW,
     br("preconj",True),
     br("ccomp",False),
@@ -236,9 +254,16 @@ Rules = [
     br("neg", True),
     br("cop",True),
     br("aux", True),
+    br("auxpass", True),
     br("xcomp", False),
     br("nsubj",True),
+    br("nsubjpass",True),
+    br("advmod", True),
+    br("tmod", True),
     br("mark",True),
+    br("advcl",False),
+    br("appos",False,prefix=", ",suffix=","),
+    br("parataxis",False,prefix=", ",suffix=",")
     ]
 
 def ToDependTree(triplets,root):
@@ -317,7 +342,10 @@ def TestAll():
     Test("This plan truely helps the middle class")
     Test("Members of both parties have told me so")
     Test("I will send this Congress a budget filled with ideas that are practical in two weeks")
-
+    Test("Each year a tight family should save 15 dollars at the pump")
+    Test("Each year a tight family , a freak, should save 15 dollars at the pump")
+    Test("I want our actions to tell every child in every neighborhood , your life matters, and we are as committed to improving your life chances as we are for our own kids")
+    
 def Reset(con, user):
     con.query("drop table %s_dependencies" % user)
     con.query("drop table %s_sentences" % user)
