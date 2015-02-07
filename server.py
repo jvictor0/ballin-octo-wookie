@@ -1,7 +1,7 @@
 from flask import Flask, request
 from flask.json import jsonify
 
-from public import Ingest, Generate, Reset
+from public import Ingest, Generate, Reset, GetSymbols
 import threading
 from collections import deque
 
@@ -23,15 +23,22 @@ class Worker(threading.Thread):
 
 @app.route("/ingest/<user_id>", methods=["POST"])
 def ingest(user_id):
+    data = request.get_json(force=True)
     ingest_queue.append({
         "user": user_id,
-        "text": request.form["text"].encode("utf-8")
+        "text": data["text"].encode("utf-8")
     })
     return jsonify(success=True)
 
 @app.route("/generate/<user_id>")
 def generate(user_id):
-    return jsonify(Generate(user_id))
+    data = request.get_json(force=True)
+    return jsonify(Generate(user_id, data["metadata"]))
+
+@app.route("/symbols")
+def symbols():
+    data = request.get_json(force=True)
+    return jsonify(GetSymbols(data["text"]))
 
 @app.route("/reset/<user_id>")
 def reset(user_id):
