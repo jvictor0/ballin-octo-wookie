@@ -1,8 +1,11 @@
-import client
 import random
 import nltk.data
 import copy
 
+from corenlp import StanfordCoreNLP
+
+# global NLP instance
+NLP = StanfordCoreNLP()
 
 def remove_id(word):
     return word.count("-") == 0 and word or word[0:word.rindex("-")]
@@ -252,8 +255,7 @@ def FromDependTree(dt, verbose=False):
     
 def Test(sentence, verbose=False):
     print sentence
-    nlp = client.StanfordNLP()
-    dt = ToDependTree(nlp.parse(sentence)["sentences"][0]["dependencies"],"ROOT-0")
+    dt = ToDependTree(NLP.parse(sentence)["sentences"][0]["dependencies"],"ROOT-0")
     print dt
     dt.Rewrite(PreRules,verbose=verbose)
     dt.Rewrite(Rules,verbose=verbose)
@@ -343,8 +345,7 @@ def InsertSentence(con, user, sentence):
     # if you SQL inject me I'll urinate on you
     sentence = sentence.encode("utf8")
     print sentence
-    nlp = client.StanfordNLP()
-    depsa = nlp.parse(sentence.decode("utf8").encode("ascii","ignore"))["sentences"]
+    depsa = NLP.parse(sentence.decode("utf8").encode("ascii","ignore"))["sentences"]
     for deps in depsa:
         txt = deps["text"].encode("utf8")
         con.query("insert into %s_sentences(sentence) values(%%s)" % (user), txt)
