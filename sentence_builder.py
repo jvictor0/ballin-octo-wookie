@@ -42,6 +42,10 @@ class DependTree:
         CHECK(len(cands) != 0)
         return cands[0]
 
+    def FindNoCheck(self,typ):
+        cands = [i for i,a in enumerate(self.children) if a[0] == typ]
+        return cands[0] if len(cands) != 0 else None
+
     def CheckAbsense(self,typ):
         cands = [i for i,a in enumerate(self.children) if a[0] == typ]
         CHECK(len(cands) == 0)
@@ -387,6 +391,24 @@ def InsertSentence(con, user, sentence):
                       remove_id(gv).lower().encode("utf8"),
                       remove_id(dp).lower().encode("utf8"))
 
+def GetSymbols(text):
+    tokenizer = nltk.data.load('tokenizers/punkt/english.pickle')
+    texts = tokenizer.tokenize(text.decode("utf8"))
+    result = {}
+    for sentence in texts:
+        sentence = sentence.encode("utf8")
+        print sentence
+        nlp = client.StanfordNLP()
+        depsa = nlp.parse(sentence.decode("utf8").encode("ascii","ignore"))["sentences"]
+        for deps in depsa:
+            dt = ToDependTree(deps["dependencies"],"ROOT-0")
+            next_result = GetImportantWords(dt, deps)
+            for k,v in next_result.iteritems():
+                if not k in result:
+                    result[k] = 0
+                result[k] += v
+    return result
+
 def Ingest(con, text, user):
     tokenizer = nltk.data.load('tokenizers/punkt/english.pickle')
     texts = tokenizer.tokenize(text.decode("utf8"))
@@ -479,3 +501,25 @@ def Generate(con, user, selector_fn):
     word = random.choice(con.query("select dependant from %s_dependencies where arctype = 'root'" % user))['dependant']
     g_last_generated = Expand(con, selector_fn, word, parent_arctype='root', user=user)
     return copy.deepcopy(g_last_generated)
+
+def GetImportantWords(parsetree, nlp):
+    root = parsetree.Child(parsetree.Find("root"))
+    result = { root.data : 1 }
+    nsubj = root.FindNoCheck("nsubj")
+    if not nsubj is None:
+        if not root.ChildStr(nsubj) in result:
+            result[root.ChildStr(nsubj)] = 0
+        result[root.ChildStr(nsubj)]+= 3
+    dobj = root.FindNoCheck("dobj")
+    if not dobj is None:
+        if not root.ChildStr(dobj) in result:
+            result[root.ChildStr(dobj)] = 0
+        result[root.ChildStr(dobj)]+= 3
+    for w,mw in nlp["words"]:
+        if mw["NamedEntityTag"] != 'O':
+            if not w in result:
+                result[w] = 0
+            result[w]+= 10
+    return result
+            
+
