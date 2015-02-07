@@ -541,6 +541,8 @@ g_last_generated = None
 def Generate(con, user, using=None):
     if not using is None:
         fixed_chain = SeekToRoot(con, user, using)
+        if len(fixed_chain) == 0:
+            return None
         word = fixed_chain[0][1]
         fixed_chain.pop(0)
     else:

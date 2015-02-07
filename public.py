@@ -11,7 +11,7 @@ def Ingest(user, text):
     except Exception as e:  # Complain if nessesary
         return { "success": False, "error": str(e) }
 
-def Generate(user):
+def Generate(user, symbols):
     con = database.ConnectToMySQL()
     con.query("use sentencebuilder")
     dbs = {}
@@ -28,3 +28,10 @@ def Reset(user):
     con.query("use sentencebuilder")
     sb.Reset(con, user)
     return { "success": True }
+
+def GetSymbols(text):
+    try:
+        result = sb.GetSymbols(text)
+        return { "success" : True, "symbols" : result }
+    except Exception as e:
+        return { "success" : False, "error": str(e) }
