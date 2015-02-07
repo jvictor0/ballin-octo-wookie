@@ -7,10 +7,9 @@ def Ingest(user, text, **kwargs):
     sb.DDL(con, user)
     try:
         sb.Ingest(con, text, user)
-        return { "success" : True }
-    except Exception as e: # Complain if nessesary
-        stre = str(e)
-        return { "success" : False, "error" : e }
+        return { "success": True }
+    except Exception as e:  # Complain if nessesary
+        return { "success": False, "error": str(e) }
 
 def Generate(user, **kwargs):
     con = database.ConnectToMySQL()
@@ -18,13 +17,12 @@ def Generate(user, **kwargs):
     try:
         gend = sb.Generate(con, user, sb.SubsetSelector)
         result = sb.FromDependTree(gend)
-        return { "success" : True, "body" : result }
+        return { "success": True, "body": result }
     except Exception as e:
-        stre = str(e)
-        return { "success" : False, "error" : e }
+        return { "success": False, "error": str(e) }
 
 def Reset(user):
     con = database.ConnectToMySQL()
     con.query("use sentencebuilder")
     sb.Reset(con, user)
-    return { "success" : True }
+    return { "success": True }
