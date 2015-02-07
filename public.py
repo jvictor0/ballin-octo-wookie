@@ -3,8 +3,28 @@ import database
 
 def Ingest(user, text, **kwargs):
     con = database.ConnectToMySQL()
-    return sb.Intest(con, text, user)
+    con.query("use sentencebuilder")
+    sb.DDL(con, user)
+    try:
+        sb.Ingest(con, text, user)
+        return { "success" : True }
+    except Exception as e: # Complain if nessesary
+        stre = str(e)
+        return { "success" : False, "error" : e }
 
 def Generate(user, **kwargs):
     con = database.ConnectToMySQL()
-    return sb.Generate(user, sb.SubsetSelector):
+    con.query("use sentencebuilder")
+    try:
+        gend = sb.Generate(con, user, sb.SubsetSelector)
+        result = sb.FromDependTree(gend)
+        return { "success" : True, "body" : result }
+    except Exception as e:
+        stre = str(e)
+        return { "success" : False, "error" : e }
+
+def Reset(user):
+    con = database.ConnectToMySQL()
+    con.query("use sentencebuilder")
+    sb.Reset(con, user)
+    return { "success" : True }
