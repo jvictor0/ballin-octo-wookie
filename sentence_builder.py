@@ -344,7 +344,7 @@ def InsertSentence(con, user, sentence):
     sentence = sentence.encode("utf8")
     print sentence
     nlp = client.StanfordNLP()
-    depsa = nlp.parse(sentence)["sentences"]
+    depsa = nlp.parse(sentence.decode("utf8").encode("ascii","ignore"))["sentences"]
     for deps in depsa:
         txt = deps["text"].encode("utf8")
         con.query("insert into %s_sentences(sentence) values(%%s)" % (user), txt)

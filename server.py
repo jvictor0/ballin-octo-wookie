@@ -1,28 +1,31 @@
 from flask import Flask, request
 from flask.json import jsonify
-app = Flask(__name__)
 
 from public import Ingest, Generate, Reset
 import threading
 from collections import deque
 
-injest_queue = deque()
+app = Flask(__name__)
+app.debug = True
+
+ingest_queue = deque()
 stopping = threading.Event()
 
 class Worker(threading.Thread):
     def run(self):
         while not stopping.is_set():
-            work = injest_queue.pop()
-            out = Ingest(**work)
-            if not out["success"]:
-                print("lol injest error")
-                print(out["error"])
+            if ingest_queue:
+                work = ingest_queue.pop()
+                out = Ingest(**work)
+                if not out["success"]:
+                    print("lol ingest error")
+                    print(out["error"])
 
-@app.route("/ingest/<user_id>")
+@app.route("/ingest/<user_id>", methods=["POST"])
 def ingest(user_id):
-    injest_queue.appendLeft({
+    ingest_queue.append({
         "user": user_id,
-        "text": request.form["text"]
+        "text": request.form["text"].encode("utf-8")
     })
     return jsonify(success=True)
 

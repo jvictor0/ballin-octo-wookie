@@ -6,7 +6,7 @@ from lispparse import Lisp
 class StanfordNLP:
     def __init__(self):
         self.server = ServerProxy(JsonRpc20(),
-                                  TransportTcpIp(addr=("127.0.0.1", 8080)))
+                                  TransportTcpIp(addr=("127.0.0.1",10003)))
     
     def parse(self, text):
         res = json.loads(self.server.parse(text))
