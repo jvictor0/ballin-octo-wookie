@@ -239,7 +239,7 @@ class StanfordCoreNLP(object):
         """
         response = self._parse(text)
         logger.info("Response: '%s'" % (response))
-        return json.dumps(response)
+        return response
 
 
 if __name__ == '__main__':

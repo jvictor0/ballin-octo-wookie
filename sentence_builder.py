@@ -10,7 +10,7 @@ NLP = StanfordCoreNLP()
 def remove_id(word):
     return word.count("-") == 0 and word or word[0:word.rindex("-")]
 def remove_word(word):
-    return word.count("-") == 0 and word or word[word.rindex("-"):]
+    return word.count("-") == -1 and word or word[word.rindex("-"):]
 
 class NoRewriteError:
     def __init__(self):
@@ -255,6 +255,7 @@ def FromDependTree(dt, verbose=False):
     
 def Test(sentence, verbose=False):
     print sentence
+    print NLP.parse(sentence)
     dt = ToDependTree(NLP.parse(sentence)["sentences"][0]["dependencies"],"ROOT-0")
     print dt
     dt.Rewrite(PreRules,verbose=verbose)
