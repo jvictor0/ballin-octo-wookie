@@ -379,18 +379,31 @@ def InsertSentence(con, user, sentence):
     # if you SQL inject me I'll urinate on you
     sentence = sentence.encode("utf8")
     print sentence
-    depsa = NLP.parse(sentence.decode("utf8").encode("ascii","ignore"))["sentences"]
+    nlp_parsed = NLP.parse(sentence.decode("utf8").encode("ascii","ignore"))
+    if not "sentences" in nlp_parsed:
+        return
+    depsa = nlp_parsed["sentences"]
     for deps in depsa:
         txt = deps["text"].encode("utf8")
-        con.query("insert into %s_sentences(sentence) values(%%s)" % (user), txt)
+        try:
+            con.query("insert into %s_sentences(sentence) values(%%s)" % (user), txt)
+        except exception as e:
+            print "insert sentence error ", e
+            continue
         sid = con.query("select max(id) as i from %s_sentences where sentence = %%s" % (user), txt)[0]["i"]
         deps = deps["dependencies"]
         for at, gv, dp in deps:
             values = [sid, "'%s'" % at, "%s",  "%s", remove_word(gv), remove_word(dp)]
             q = "insert into %s_dependencies values (%s)" % (user,",".join(values))
-            con.query(q.encode("utf8"),
-                      remove_id(gv).lower().encode("utf8"),
-                      remove_id(dp).lower().encode("utf8"))
+            try:
+                con.query(q.encode("utf8"),
+                          remove_id(gv).lower().encode("utf8"),
+                          remove_id(dp).lower().encode("utf8"))
+            except Exception as e:
+                print "insert dep error", e
+                con.query("delete from %s_sentences where id = %s" % (user,sid))
+                con.query("delete from %s_dependencies where sentence_id = %s" % (user,sid))
+                break
 
 def GetSymbols(text):
     tokenizer = nltk.data.load('tokenizers/punkt/english.pickle')
@@ -445,8 +458,12 @@ def HistogramSubsets(con, word, parent_arctype = None, user = None, **kwargs):
     q = "select subs.gc as gc, count(*) as c from %s subs group by subs.gc" % subs
     return [([] if r["gc"] is None else r["gc"].split(","),int(r["c"])) for r in con.query(q, word)]
 
-def SubsetSelector(con, word, **kwargs):
+def SubsetSelector(con, word, fixed_arc=None, **kwargs):
     hist = HistogramSubsets(con, word, **kwargs)
+    if not fixed_arc is None:
+        hist = [h for h in hist if fixed_arc in h[0]]
+        for h in hist:
+            h[0].pop(h[0].index(fixed_arc))
     if len(hist) == 0:
         return []
     return RandomWeightedChoice(hist)
@@ -487,19 +504,50 @@ def RandomDependant(con, user, gov, arctype):
     q = "select dependant from %s_dependencies where governor = %%s and arctype = %%s" % user
     return random.choice(con.query(q,gov,arctype))['dependant']
         
-def Expand(con, selector_fn, word, user=None, **kwargs):
-    arctypes = selector_fn(con, word, user=user, **kwargs)
+def Expand(con, word, user=None, fixed_chain = None, **kwargs):
+    if not fixed_chain is None and len(fixed_chain) == 0:
+        fixed_chain = None
+    arctypes = SubsetSelector(con, word, user=user,
+                              fixed_arc = fixed_chain[0][0] if not fixed_chain is None else None, **kwargs)
     outs = []
     for at in arctypes:
-        outs.append((at,Expand(con, selector_fn, RandomDependant(con, user, word, at), user=user, parent_arctype=at)))
+        outs.append((at,Expand(con, RandomDependant(con, user, word, at),
+                               user=user, fixed_chain=None, parent_arctype=at)))
+    if not fixed_chain is None:
+        outs.append((fixed_chain[0][0],
+                     Expand(con, fixed_chain[0][1],
+                            user=user, fixed_chain=fixed_chain[1:], parent_arctype=fixed_chain[0][0])))
     return DependTree(word,outs)
+
+# SeekToRoot :: dependant -> [(arctype, dependant)]
+def SeekToRoot(con, user, dependant):
+    result = []
+    while dependant != "root":
+        q = (("select governor, arctype from %s_dependencies "
+              "where dependant = %%s"))
+        q = q % user
+        print q
+        rows = con.query(q,dependant)
+        if len(rows) == 0:
+            return []
+        row = random.choice(rows)
+        result.append((row["arctype"],dependant))
+        dependant = row["governor"]
+    print result
+    return result[-1::-1]
 
 g_last_generated = None
 
-def Generate(con, user, selector_fn):
+def Generate(con, user, using=None):
+    if not using is None:
+        fixed_chain = SeekToRoot(con, user, using)
+        word = fixed_chain[0][1]
+        fixed_chain.pop(0)
+    else:
+        fixed_chain = None
+        word = random.choice(con.query("select dependant from %s_dependencies where arctype = 'root'" % user))['dependant']
     global g_last_generated
-    word = random.choice(con.query("select dependant from %s_dependencies where arctype = 'root'" % user))['dependant']
-    g_last_generated = Expand(con, selector_fn, word, parent_arctype='root', user=user)
+    g_last_generated = Expand(con, word, parent_arctype='root', user=user, fixed_chain=fixed_chain)
     return copy.deepcopy(g_last_generated)
 
 def GetImportantWords(parsetree, nlp):
