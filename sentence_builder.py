@@ -5,7 +5,8 @@ import copy
 from corenlp import StanfordCoreNLP
 
 # global NLP instance
-NLP = StanfordCoreNLP()
+if True:
+    NLP = StanfordCoreNLP()
 
 def remove_id(word):
     return word.count("-") == 0 and word or word[0:word.rindex("-")]
@@ -398,8 +399,7 @@ def GetSymbols(text):
     for sentence in texts:
         sentence = sentence.encode("utf8")
         print sentence
-        nlp = client.StanfordNLP()
-        depsa = nlp.parse(sentence.decode("utf8").encode("ascii","ignore"))["sentences"]
+        depsa = NLP.parse(sentence.decode("utf8").encode("ascii","ignore"))["sentences"]
         for deps in depsa:
             dt = ToDependTree(deps["dependencies"],"ROOT-0")
             next_result = GetImportantWords(dt, deps)

@@ -26,7 +26,7 @@ from progressbar import ProgressBar, Fraction
 import logging
 
 
-VERBOSE = True
+VERBOSE = False
 
 STATE_START, STATE_TEXT, STATE_WORDS, STATE_TREE, STATE_DEPENDENCY, STATE_COREFERENCE = 0, 1, 2, 3, 4, 5
 WORD_PATTERN = re.compile('\[([^\]]+)\]')
@@ -66,7 +66,7 @@ def parse_bracketed(s):
 
 
 def parse_parser_results(text):
-    print text
+    #print text
     """ This is the nasty bit of code to interact with the command-line
     interface of the CoreNLP tools.  Takes a string of the parser results
     and then returns a Python list of dictionaries, one for each parsed
@@ -238,7 +238,8 @@ class StanfordCoreNLP(object):
         with one dictionary entry for each parsed sentence, in JSON format.
         """
         response = self._parse(text)
-        logger.info("Response: '%s'" % (response))
+        if VERBOSE:
+            logger.info("Response: '%s'" % (response))
         return response
 
 
