@@ -42,6 +42,13 @@ class DependTree:
         CHECK(len(cands) != 0)
         return cands[0]
 
+    def FindOne(self,typ):
+        for t in typ:
+            result = self.FindNoCheck(t)
+            if not result is None:
+                return result
+        CHECK(False)
+
     def FindNoCheck(self,typ):
         cands = [i for i,a in enumerate(self.children) if a[0] == typ]
         return cands[0] if len(cands) != 0 else None
@@ -183,7 +190,7 @@ def RCModRW(t):
     return t
 
 def AdvmodAmod(t):
-    amod = t.Find("amod")
+    amod = t.FindOne(["amod","acomp"])
     advmod = t.Child(amod).Find("advmod")
     CHECK(t.Child(amod).Child(advmod).IsLeaf())
     t.Child(amod).Prepend(-1, advmod)
@@ -199,10 +206,18 @@ def AuxAposRW(t):
         
 def NegAuxRW(t):
     neg = t.Find("neg")
-    aux = t.Find("aux")
+    aux = t.FindOne(["aux"])
     CHECK(t.Child(neg).IsLeaf())
     CHECK(t.Child(aux).IsLeaf())
     t.Postpend(aux, neg)
+    return t
+
+def NegCCompRW(t):
+    neg = t.Find("neg")
+    aux = t.Find("ccomp")
+    CHECK(t.Child(neg).IsLeaf())
+    CHECK(t.Child(aux).IsLeaf())
+    t.Prepend(aux, neg)
     return t
 
 def RootRW(t):
@@ -259,6 +274,7 @@ PreRules = [
 Rules = [
     RootRW,
     NegAuxRW,
+    NegCCompRW,
     AuxAposRW,
     br("nn", True),
     br("amod", True),
@@ -269,18 +285,21 @@ Rules = [
     br("det", True),
     br("predet", True),
     br("prt", False),
+    br("pcomp",False),
     PossRW,
     br("dep",False),
 #    CompSentRW,
     br("iobj",False),
     br("dobj",False),
-    br("pobj",False),
     br("vmod", False),
+    br("acomp", False),
     ConjRW,
     br("preconj",True),
     br("ccomp",False),
     br("rcmod",False),
     PrepRW,
+    br("pobj",False),
+    br("quantmod",True),
     br("neg", True),
     br("cop",True),
     br("aux", True),
@@ -290,13 +309,15 @@ Rules = [
     br("nsubj",True),
     br("nsubjpass",True),
     br("expl",True),
-    br("prep",True),
+    br("prep",False),
     br("tmod", True),
+    br("mwe",True),
+    br("number",True),
     br("mark",True),
     br("advcl",False,prefix=", ",suffix=","),
     br("appos",False,prefix=", ",suffix=","),
     br("parataxis",False,prefix=", ",suffix=","),
-    br("discourse",True,prefix=", ",suffix=",")
+    br("discourse",True,prefix=", ",suffix=","),
     ]
 
 def ToDependTree(triplets,root):
@@ -331,68 +352,77 @@ def Test(sentence, verbose=False):
     assert result == sentence
     print
 
-def TestAll():
-    Test("dog eats")
-    Test("dog eats cat")
-    Test("the dog eats the cat")
-    Test("the scary dog eats the big cat")
-    Test("the scary dog eats the big cat, and the smelly rat")
-#    Test("the dog kills and eats the cat")
-    Test("the dog is scary")
-    Test("the dog will be scary")
-    Test("the dog is not scary")
-    Test("the dog is not by the barn")
-    Test("the dog will not be the president")
-    Test("I am the greatest president")
-    Test("You shall not pass up this chance to sleep with me")
-    Test("You shall not pass up this chance to make out with me")
-    Test("Paula handed the keys to her father")
-    Test("Paula handed her father the keys")
-    Test("The crazy, and cute, dog is not awesome")
-    Test("The crazy, but not cute, dog is not awesome")
-    Test("The crazy, and not cute, dog is not awesome")
-    Test("The not crazy, and not cute, dog is not awesome")
-    Test("The not crazy, but cute, dog is not awesome")
-    Test("The dog that mother ate is cute")
-    Test("I saw the book which you bought")
-    Test("I saw the book which you bought in the attic")
-    Test("They shut down the station")
-    Test("He purchased it without paying a premium")
-    Test("I saw a cat with a telescope")
-    Test("All the boys are here")
-    Test("The boys, and the girls, are here")
-    Test("I love Bill's clothes")
-    Test("I love its cool clothes")
-    Test("We have no information on whether users are at risk")
-    Test("They heard about your missing classes")
-    Test("We're annoyed let's face it")
-    Test("He says that you like to swim")
-    Test("I am certain that he did it")
-    Test("I admire the fact that you are honest")
-#    Test("What she said is not true")
-#    Test("What she said is totally not true")
-    Test("She said what is true")
-    Test("I ate the cow, and killed the chicken")
-    Test("I ate the cow, and didn't kill the chicken")
-    Test("I didn't eat the cow, and killed the chicken")
-    Test("I didn't eat the cow, or kill the chicken")
-    Test("I heard it's a dog")
-#    Test("Go fuck yourself!") # needs '!' to understand its a command, wont print '!'
-    Test("Fuck yourself")
-    Test("If I were a cat I would be cute")
-    Test("This plan truely helps the middle class")
-    Test("Members of both parties have told me so")
-    Test("I will send this Congress a budget filled with ideas that are practical in two weeks")
-    Test("Each year a tight family should save 15 dollars at the pump")
-    Test("Each year a tight family, a freak, should save 15 dollars at the pump")
-    Test("I want our actions to tell every child in every neighborhood, your life matters, and we are as committed to improving your life chances, as we are for our own kids")
-    Test("I am a really cool cat")
-    Test("I quickly ate the dog")
-    Test("I am really cool")
-    Test("There is a ghost in the room")
-    Test("For here there is no place that does not see you")
-    Test("Yes, passions fly still, but we can surely overcome our differences")
-    Test("We're slashing the backlog")
+def TestAll(verbose=False):
+    Test("dog eats",verbose=verbose)
+    Test("dog eats cat",verbose=verbose)
+    Test("the dog eats the cat",verbose=verbose)
+    Test("the scary dog eats the big cat",verbose=verbose)
+    Test("the scary dog eats the big cat, and the smelly rat",verbose=verbose)
+#    Test("the dog kills and eats the cat",verbose=verbose)
+    Test("the dog is scary",verbose=verbose)
+    Test("the dog will be scary",verbose=verbose)
+    Test("the dog is not scary",verbose=verbose)
+    Test("the dog is not by the barn",verbose=verbose)
+    Test("the dog will not be the president",verbose=verbose)
+    Test("I am the greatest president",verbose=verbose)
+    Test("You shall not pass up this chance to sleep with me",verbose=verbose)
+    Test("You shall not pass up this chance to make out with me",verbose=verbose)
+    Test("Paula handed the keys to her father",verbose=verbose)
+    Test("Paula handed her father the keys",verbose=verbose)
+    Test("The crazy, and cute, dog is not awesome",verbose=verbose)
+    Test("The crazy, but not cute, dog is not awesome",verbose=verbose)
+    Test("The crazy, and not cute, dog is not awesome",verbose=verbose)
+    Test("The not crazy, and not cute, dog is not awesome",verbose=verbose)
+    Test("The not crazy, but cute, dog is not awesome",verbose=verbose)
+    Test("The dog that mother ate is cute",verbose=verbose)
+    Test("I saw the book which you bought",verbose=verbose)
+    Test("I saw the book which you bought in the attic",verbose=verbose)
+    Test("They shut down the station",verbose=verbose)
+    Test("He purchased it without paying a premium",verbose=verbose)
+    Test("I saw a cat with a telescope",verbose=verbose)
+    Test("All the boys are here",verbose=verbose)
+    Test("The boys, and the girls, are here",verbose=verbose)
+    Test("I love Bill's clothes",verbose=verbose)
+    Test("I love its cool clothes",verbose=verbose)
+    Test("We have no information on whether users are at risk",verbose=verbose)
+    Test("They heard about your missing classes",verbose=verbose)
+    Test("We're annoyed let's face it",verbose=verbose)
+    Test("He says that you like to swim",verbose=verbose)
+    Test("I am certain that he did it",verbose=verbose)
+    Test("I admire the fact that you are honest",verbose=verbose)
+#    Test("What she said is not true",verbose=verbose)
+#    Test("What she said is totally not true",verbose=verbose)
+    Test("She said what is true",verbose=verbose)
+    Test("I ate the cow, and killed the chicken",verbose=verbose)
+    Test("I ate the cow, and didn't kill the chicken",verbose=verbose)
+    Test("I didn't eat the cow, and killed the chicken",verbose=verbose)
+    Test("I didn't eat the cow, or kill the chicken",verbose=verbose)
+    Test("I heard it's a dog",verbose=verbose)
+#    Test("Go fuck yourself!") # needs '!' to understand its a command, wont print '!,
+    Test("Fuck yourself",verbose=verbose)
+    Test("If I were a cat I would be cute",verbose=verbose)
+    Test("This plan truely helps the middle class",verbose=verbose)
+    Test("Members of both parties have told me so",verbose=verbose)
+    Test("I will send this Congress a budget filled with ideas that are practical in two weeks",verbose=verbose)
+    Test("Each year a tight family should save 15 dollars at the pump",verbose=verbose)
+    Test("Each year a tight family, a freak, should save 15 dollars at the pump",verbose=verbose)
+    Test("I want our actions to tell every child in every neighborhood, your life matters, and we are as committed to improving your life chances, as we are for our own kids",verbose=verbose)
+    Test("I am a really cool cat",verbose=verbose)
+    Test("I quickly ate the dog",verbose=verbose)
+    Test("I am really cool",verbose=verbose)
+    Test("There is a ghost in the room",verbose=verbose)
+    Test("There is no place that does not see you for here",verbose=verbose)
+    Test("Yes, passions fly still, but we can surely overcome our differences",verbose=verbose)
+    Test("We're slashing the backlog",verbose=verbose)
+    Test("She looks very beautiful",verbose=verbose)
+    Test("We are as good as ever",verbose=verbose)
+    Test("I want just one",verbose=verbose)
+    Test("I want more than one",verbose=verbose)
+    Test("He cried because of you",verbose=verbose)
+    Test("I have 3.2 billion dollars",verbose=verbose)
+    Test("It's not what keeps us strong",verbose=verbose)
+    Test("It isn't what keeps us strong",verbose=verbose)
+    Test("She is working as hard as ever, but has to forego vacations",verbose=verbose)
     
 def Reset(con, user):
     con.query("drop table %s_dependencies" % user)
@@ -514,7 +544,7 @@ def SubsetSelector(con, word, fixed_arc=None, height=0, **kwargs):
     if len(hist) == 0:
         return []
     for i in xrange(len(hist)):
-        denom = (1.0 + HEIGHT_THROTTLER * float(height))**len(hist[i][0])
+        denom = 1.0 if height == 0 else (HEIGHT_THROTTLER * float(height))**len(hist[i][0])
         hist[i] = (hist[i][0], float(hist[i][1])/denom)
     return RandomWeightedChoice(hist)
 
