@@ -116,7 +116,7 @@ class DependTree:
     def ToDict(self):
         return {
             "data" : self.data,
-            "children" : [{"arctype" : c1, "child" : c2} for c1,c2 in self.children]
+            "children" : [{"arctype" : c1, "child" : c2.ToDict()} for c1,c2 in self.children]
             }
     
 def CHECK(a):
