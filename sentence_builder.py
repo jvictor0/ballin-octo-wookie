@@ -3,6 +3,8 @@ import nltk.data
 import copy
 import client
 
+HEIGHT_THROTTLER = 1.0
+
 NLP = client.StanfordNLP()
 
 def remove_id(word):
@@ -503,7 +505,7 @@ def HistogramSubsets(con, word, parent_arctype = None, user = None, **kwargs):
     hists = [h for h in hists if len([x for x in h[0] if x == "nsubj"]) < 2] # i simple cant even
     return hists
 
-def SubsetSelector(con, word, fixed_arc=None, **kwargs):
+def SubsetSelector(con, word, fixed_arc=None, height=0, **kwargs):
     hist = HistogramSubsets(con, word, **kwargs)
     if not fixed_arc is None:
         hist = [h for h in hist if fixed_arc in h[0]]
@@ -511,25 +513,29 @@ def SubsetSelector(con, word, fixed_arc=None, **kwargs):
             h[0].pop(h[0].index(fixed_arc))
     if len(hist) == 0:
         return []
+    for i in xrange(len(hist)):
+        denom = (1.0 + HEIGHT_THROTTLER * float(height))**len(hist[i][0])
+        hist[i] = (hist[i][0], float(hist[i][1])/denom)
     return RandomWeightedChoice(hist)
 
 def RandomDependant(con, user, gov, arctype):
     q = "select dependant from %s_dependencies where governor = %%s and arctype = %%s" % user
     return random.choice(con.query(q,gov,arctype))['dependant']
         
-def Expand(con, word, user=None, fixed_chain = None, **kwargs):
+def Expand(con, word, height=0, user=None, fixed_chain = None, **kwargs):
     if not fixed_chain is None and len(fixed_chain) == 0:
         fixed_chain = None
-    arctypes = SubsetSelector(con, word, user=user,
+    arctypes = SubsetSelector(con, word, user=user, height = height, 
                               fixed_arc = fixed_chain[0][0] if not fixed_chain is None else None, **kwargs)
     outs = []
     for at in arctypes:
         outs.append((at,Expand(con, RandomDependant(con, user, word, at),
-                               user=user, fixed_chain=None, parent_arctype=at)))
+                               height = height + 1, user=user, fixed_chain=None, parent_arctype=at)))
     if not fixed_chain is None:
         outs.append((fixed_chain[0][0],
                      Expand(con, fixed_chain[0][1],
-                            user=user, fixed_chain=fixed_chain[1:], parent_arctype=fixed_chain[0][0])))
+                            height = height + 1, user=user,
+                            fixed_chain=fixed_chain[1:], parent_arctype=fixed_chain[0][0])))
     return DependTree(word,outs)
 
 # SeekToRoot :: dependant -> [(arctype, dependant)]
