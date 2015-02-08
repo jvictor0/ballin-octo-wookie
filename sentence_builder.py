@@ -531,6 +531,7 @@ def Generate(con, user, using=None):
     return copy.deepcopy(g_last_generated)
 
 def GenerateWithSymbols(con, user, symbols):
+    symbols = { k.encode("utf8") : v for k,v in symbols.iteritems() }
     while len(symbols) != 0:
         using = RandomWeightedChoice(symbols.items())
         del symbols[using]
