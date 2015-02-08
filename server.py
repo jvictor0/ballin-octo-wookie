@@ -30,17 +30,17 @@ def ingest(user_id):
     })
     return jsonify(success=True)
 
-@app.route("/generate/<user_id>")
+@app.route("/generate/<user_id>", methods=["POST"])
 def generate(user_id):
     data = request.get_json(force=True)
     return jsonify(Generate(user_id, data["metadata"]))
 
-@app.route("/symbols")
+@app.route("/symbols", methods=["POST"])
 def symbols():
     data = request.get_json(force=True)
     return jsonify(GetSymbols(data["text"]))
 
-@app.route("/reset/<user_id>")
+@app.route("/reset/<user_id>", methods=["GET", "POST"])
 def reset(user_id):
     return jsonify(Reset(user_id))
 
