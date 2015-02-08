@@ -148,10 +148,11 @@ def ConjRW(t):
         if t.children[i][0].split("_")[0]  == "conj":
             CHECK(t.Child(i).IsLeaf())
             if t.children[i][0] == "conj_negcc":
-                conj = "but not"
+                conj = ", but not"
             else:
-                conj = t.children[i][0].split("_")[1]
+                conj = ", " + t.children[i][0].split("_")[1]
             t.data = t.data + " " + conj
+            t.children[i][1].data = t.ChildStr(i) + ","
             t.Postpend(-1, i)
             return t
     CHECK(False)
@@ -191,7 +192,7 @@ def AuxAposRW(t):
     aux = t.Find("aux")
     CHECK(t.ChildStr(aux)[0] == "'")
     CHECK(t.Child(aux).IsLeaf())
-    t.Postpend(-1, aux)
+    t.Prepend(-1, aux)
     return t
         
 def NegAuxRW(t):
@@ -290,9 +291,10 @@ Rules = [
     br("prep",True),
     br("tmod", True),
     br("mark",True),
-    br("advcl",False),
+    br("advcl",False,prefix=", ",suffix=","),
     br("appos",False,prefix=", ",suffix=","),
-    br("parataxis",False,prefix=", ",suffix=",")
+    br("parataxis",False,prefix=", ",suffix=","),
+    br("discourse",True,prefix=", ",suffix=",")
     ]
 
 def ToDependTree(triplets,root):
@@ -300,22 +302,31 @@ def ToDependTree(triplets,root):
     children = [(t[0], ToDependTree(triplets, t[2])) for t in outgoing]
     return DependTree(root,children)
 
-def FromDependTree(dt, verbose=False):
+def FixPunctuation(sentence):
+    sentence = sentence.strip(" ,")
+    while True:
+        old_sentence = sentence
+        sentence = sentence.replace(" ,",",")
+        sentence = sentence.replace(",,",",")
+        if old_sentence == sentence:
+            break
+    return sentence
+
+def FromDependTree(dt, verbose=False,printres=False):
     dt.Rewrite(PreRules,verbose=verbose)
     dt.Rewrite(Rules,verbose=verbose)
+    if printres:
+        print dt
     assert dt.IsLeaf(), str(dt)
-    return dt.data
+    return FixPunctuation(dt.data)
     
     
 def Test(sentence, verbose=False):
     print sentence
     dt = ToDependTree(NLP.parse(sentence)["sentences"][0]["dependencies"],"ROOT-0")
     print dt
-    dt.Rewrite(PreRules,verbose=verbose)
-    dt.Rewrite(Rules,verbose=verbose)
-    print dt
-    assert dt.IsLeaf()
-    assert dt.data == sentence
+    result = FromDependTree(dt,verbose=verbose,printres=True)
+    assert result == sentence
     print
 
 def TestAll():
@@ -323,7 +334,7 @@ def TestAll():
     Test("dog eats cat")
     Test("the dog eats the cat")
     Test("the scary dog eats the big cat")
-    Test("the scary dog eats the big cat and the smelly rat")
+    Test("the scary dog eats the big cat, and the smelly rat")
 #    Test("the dog kills and eats the cat")
     Test("the dog is scary")
     Test("the dog will be scary")
@@ -335,11 +346,11 @@ def TestAll():
     Test("You shall not pass up this chance to make out with me")
     Test("Paula handed the keys to her father")
     Test("Paula handed her father the keys")
-    Test("The crazy and cute dog is not awesome")
-    Test("The crazy but not cute dog is not awesome")
-    Test("The crazy and not cute dog is not awesome")
-    Test("The not crazy and not cute dog is not awesome")
-    Test("The not crazy but cute dog is not awesome")
+    Test("The crazy, and cute, dog is not awesome")
+    Test("The crazy, but not cute, dog is not awesome")
+    Test("The crazy, and not cute, dog is not awesome")
+    Test("The not crazy, and not cute, dog is not awesome")
+    Test("The not crazy, but cute, dog is not awesome")
     Test("The dog that mother ate is cute")
     Test("I saw the book which you bought")
     Test("I saw the book which you bought in the attic")
@@ -347,7 +358,7 @@ def TestAll():
     Test("He purchased it without paying a premium")
     Test("I saw a cat with a telescope")
     Test("All the boys are here")
-    Test("Both the boys and the girls are here")
+    Test("The boys, and the girls, are here")
     Test("I love Bill's clothes")
     Test("I love its cool clothes")
     Test("We have no information on whether users are at risk")
@@ -359,10 +370,10 @@ def TestAll():
 #    Test("What she said is not true")
 #    Test("What she said is totally not true")
     Test("She said what is true")
-    Test("I ate the cow and killed the chicken")
-    Test("I ate the cow and didn't kill the chicken")
-    Test("I didn't eat the cow and killed the chicken")
-    Test("I didn't eat the cow or kill the chicken")
+    Test("I ate the cow, and killed the chicken")
+    Test("I ate the cow, and didn't kill the chicken")
+    Test("I didn't eat the cow, and killed the chicken")
+    Test("I didn't eat the cow, or kill the chicken")
     Test("I heard it's a dog")
 #    Test("Go fuck yourself!") # needs '!' to understand its a command, wont print '!'
     Test("Fuck yourself")
@@ -371,13 +382,15 @@ def TestAll():
     Test("Members of both parties have told me so")
     Test("I will send this Congress a budget filled with ideas that are practical in two weeks")
     Test("Each year a tight family should save 15 dollars at the pump")
-    Test("Each year a tight family , a freak, should save 15 dollars at the pump")
-    Test("I want our actions to tell every child in every neighborhood , your life matters, and we are as committed to improving your life chances as we are for our own kids")
+    Test("Each year a tight family, a freak, should save 15 dollars at the pump")
+    Test("I want our actions to tell every child in every neighborhood, your life matters, and we are as committed to improving your life chances, as we are for our own kids")
     Test("I am a really cool cat")
     Test("I quickly ate the dog")
     Test("I am really cool")
     Test("There is a ghost in the room")
     Test("For here there is no place that does not see you")
+    Test("Yes, passions fly still, but we can surely overcome our differences")
+    Test("We're slashing the backlog")
     
 def Reset(con, user):
     con.query("drop table %s_dependencies" % user)
@@ -549,8 +562,9 @@ def Generate(con, user, using=None):
         fixed_chain = None
         word = random.choice(con.query("select dependant from %s_dependencies where arctype = 'root'" % user))['dependant']
     global g_last_generated
-    return Expand(con, word, parent_arctype='root', user=user, fixed_chain=fixed_chain)
-    return copy.deepcopy(g_last_generated)
+    result = Expand(con, word, parent_arctype='root', user=user, fixed_chain=fixed_chain)
+    g_last_generated = copy.deepcopy(result)
+    return result
 
 def GenerateWithSymbols(con, user, symbols):
     symbols = { k.encode("utf8") : v for k,v in symbols.iteritems() }
