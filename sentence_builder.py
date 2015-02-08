@@ -505,7 +505,7 @@ def SeekToRoot(con, user, dependant):
               "where dependant = %%s"))
         q = q % user
         print q
-        rows = con.query(q,dependant)
+        rows = con.query(q,dependant.encode("utf8"))
         if len(rows) == 0:
             return []
         row = random.choice(rows)
