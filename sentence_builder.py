@@ -536,10 +536,12 @@ def GenerateWithSymbols(con, user, symbols):
         del symbols[using]
         result = Generate(con, user, using)
         if not result is None:
-            return result
-    return Generate(con, user, None)
+            syms = GetImportantWords(DependTree("root", [("root",result)]), { "words" : []})
+            return result, syms
+    result = Generate(con, user, None)
+    syms = GetImportantWords(DependTree("root", [("root",result)]), { "words" : []})
+    return result, syms
     
-
 
 def GetImportantWords(parsetree, nlp):
     root = parsetree.Child(parsetree.Find("root"))
