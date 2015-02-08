@@ -190,7 +190,7 @@ def RCModRW(t):
     return t
 
 def AdvmodAmod(t):
-    amod = t.FindOne(["amod","acomp"])
+    amod = t.FindOne(["amod","acomp","advmod"])
     advmod = t.Child(amod).Find("advmod")
     CHECK(t.Child(amod).Child(advmod).IsLeaf())
     t.Child(amod).Prepend(-1, advmod)
@@ -423,6 +423,8 @@ def TestAll(verbose=False):
     Test("It's not what keeps us strong",verbose=verbose)
     Test("It isn't what keeps us strong",verbose=verbose)
     Test("She is working as hard as ever, but has to forego vacations",verbose=verbose)
+    Test("We are any better off",verbose=verbose)
+
     
 def Reset(con, user):
     con.query("drop table %s_dependencies" % user)
