@@ -16,7 +16,7 @@ def Generate(user, symbols):
     con.query("use sentencebuilder")
     dbs = {}
     try:
-        gend = sb.Generate(con, user)
+        gend = sb.GenerateWithSymbols(con, user, symbols)
         result = sb.FromDependTree(gend)
         dbs = sb.g_last_generated.ToDict()
         return { "success": True,   "body": result, "debugging_stuff" : { "original_tree" : dbs } }

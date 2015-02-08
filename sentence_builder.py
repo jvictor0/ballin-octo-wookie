@@ -5,7 +5,7 @@ import copy
 from corenlp import StanfordCoreNLP
 
 # global NLP instance
-if True:
+if False:
     NLP = StanfordCoreNLP()
 
 def remove_id(word):
@@ -530,6 +530,17 @@ def Generate(con, user, using=None):
     global g_last_generated
     g_last_generated = Expand(con, word, parent_arctype='root', user=user, fixed_chain=fixed_chain)
     return copy.deepcopy(g_last_generated)
+
+def GenerateWithSymbols(con, user, symbols):
+    while len(symbols) != 0:
+        using = RandomWeightedChoice(symbols.items())
+        del symbols[using]
+        result = Generate(con, user, using)
+        if not result is None:
+            return result
+    Generate(con, user, None)
+    
+
 
 def GetImportantWords(parsetree, nlp):
     root = parsetree.Child(parsetree.Find("root"))
