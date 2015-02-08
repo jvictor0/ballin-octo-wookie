@@ -467,7 +467,7 @@ def HistogramSubsets(con, word, parent_arctype = None, user = None, **kwargs):
     hists = [([] if r["gc"] is None else r["gc"].split(","),int(r["c"])) for r in con.query(q, word)]
     disallowed = ["cc"]
     hists = [h for h in hists if len([x for x in h[0] if x in disallowed]) == 0]
-    return 
+    return hists
 
 def SubsetSelector(con, word, fixed_arc=None, **kwargs):
     hist = HistogramSubsets(con, word, **kwargs)
