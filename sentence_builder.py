@@ -527,7 +527,7 @@ def Generate(con, user, using=None):
         fixed_chain = None
         word = random.choice(con.query("select dependant from %s_dependencies where arctype = 'root'" % user))['dependant']
     global g_last_generated
-    g_last_generated = Expand(con, word, parent_arctype='root', user=user, fixed_chain=fixed_chain)
+    return Expand(con, word, parent_arctype='root', user=user, fixed_chain=fixed_chain)
     return copy.deepcopy(g_last_generated)
 
 def GenerateWithSymbols(con, user, symbols):
