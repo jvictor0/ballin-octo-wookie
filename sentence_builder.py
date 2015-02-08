@@ -1,12 +1,9 @@
 import random
 import nltk.data
 import copy
+import client
 
-from corenlp import StanfordCoreNLP
-
-# global NLP instance
-if True:
-    NLP = StanfordCoreNLP()
+NLP = client.StanfordNLP()
 
 def remove_id(word):
     return word.count("-") == 0 and word or word[0:word.rindex("-")]

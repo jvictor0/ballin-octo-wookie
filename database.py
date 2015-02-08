@@ -86,7 +86,6 @@ class Connection(object):
             self._db = conn
 
     def query(self, query, *parameters):
-        print query, parameters
         self._execute(query, *parameters)
         self._result = self._db.use_result()
         if self._result is None:
