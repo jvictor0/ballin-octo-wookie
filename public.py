@@ -16,10 +16,10 @@ def Generate(user, symbols):
     con.query("use sentencebuilder")
     dbs = {}
     try:
-        gend = sb.Generate(con, user, sb.SubsetSelector)
+        gend = sb.Generate(con, user)
         result = sb.FromDependTree(gend)
         dbs = sb.g_last_generated.ToDict()
-        return { "success": True, "body": result,   "debugging_stuff" : { "original_tree" : dbs } }
+        return { "success": True,   "body": result, "debugging_stuff" : { "original_tree" : dbs } }
     except Exception as e:
         return { "success": False, "error": str(e), "debugging_stuff" : { "original_tree" : dbs } }
 

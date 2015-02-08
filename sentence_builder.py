@@ -5,13 +5,13 @@ import copy
 from corenlp import StanfordCoreNLP
 
 # global NLP instance
-if True:
+if False:
     NLP = StanfordCoreNLP()
 
 def remove_id(word):
     return word.count("-") == 0 and word or word[0:word.rindex("-")]
 def remove_word(word):
-    return word.count("-") == -1 and word or word[word.rindex("-"):]
+    return word.count("-") == -1 and word or word[(1+word.rindex("-")):]
 
 class NoRewriteError:
     def __init__(self):
@@ -178,6 +178,13 @@ def RCModRW(t):
     t.children[rcm] = ("rcmod_" + t.Child(rcm).ChildStr(rcmobj),t.children[rcm][1])
     t.Child(rcm).Pop(rcmobj)
     return t
+
+def AuxAposRW(t):
+    aux = t.Find("aux")
+    CHECK(t.ChildStr(aux)[0] == "'")
+    CHECK(t.Child(aux).IsLeaf())
+    t.Postpend(-1, aux)
+    return t
         
 def NegAuxRW(t):
     neg = t.Find("neg")
@@ -234,6 +241,7 @@ PreRules = [RCModRW]
 Rules = [
     RootRW,
     NegAuxRW,
+    AuxAposRW,
     br("nn", True),
     br("amod", True),
     br("num", True),
@@ -456,7 +464,10 @@ def HistogramSubsets(con, word, parent_arctype = None, user = None, **kwargs):
              "group by dl.sentence_id, dl.dependant_id)")
     subs = subs % (user, user, "" if parent_arctype is None else "and dl.arctype = '%s'" % parent_arctype)
     q = "select subs.gc as gc, count(*) as c from %s subs group by subs.gc" % subs
-    return [([] if r["gc"] is None else r["gc"].split(","),int(r["c"])) for r in con.query(q, word)]
+    hists = [([] if r["gc"] is None else r["gc"].split(","),int(r["c"])) for r in con.query(q, word)]
+    disallowed = ["cc"]
+    hists = [h for h in hists if len([x for x in h[0] if x in disallowed]) == 0]
+    return 
 
 def SubsetSelector(con, word, fixed_arc=None, **kwargs):
     hist = HistogramSubsets(con, word, **kwargs)
@@ -467,38 +478,6 @@ def SubsetSelector(con, word, fixed_arc=None, **kwargs):
     if len(hist) == 0:
         return []
     return RandomWeightedChoice(hist)
-
-# this can probably be done in a single SQL query, but accounting for zeros is more annoying
-# but this strategy is both slower and seems to produce worse sentences, so it shall not be used!
-#
-def HistogramSingles(con, word):
-    sentence_ids = con.query("select sentence_id, dependant_id from dependencies where dependant = '%s'" % word)
-    hist = {}
-    count = 0
-    for s in sentence_ids:
-        q = ("select arctype, count(*) as ct "
-             "from dependencies "
-             "where governor = %%s and sentence_id = %s and governor_id = %s "
-             "group by arctype")
-        q = q % (s["sentence_id"], s["dependant_id"])
-        rows = con.query(q,word)
-        arctypes = set([])
-        for r in rows:
-            at = r["arctype"]
-            arctypes.add(at)
-            if not at in hist:
-                hist[at] = [count]
-            ct = int(r["ct"])
-            while len(hist[at]) <= ct:
-                hist[at].append(0)
-            hist[at][ct] += 1
-        count += 1
-        for at,h in hist.iteritems():
-            if not at in arctypes:
-                h[0] += 1
-    for ah,h in hist.iteritems():
-        assert sum(h) == count
-    return hist
 
 def RandomDependant(con, user, gov, arctype):
     q = "select dependant from %s_dependencies where governor = %%s and arctype = %%s" % user
