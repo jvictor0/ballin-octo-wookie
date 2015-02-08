@@ -122,6 +122,8 @@ def CHECK(a):
 
 def PrepRW(t):
     for i in xrange(len(t.children)):
+        if not "_" in t.children[i][0]:
+            continue
         tp = t.children[i][0].split("_")[0]
         if tp in ["prep","prepc","rcmod"]:
             CHECK(t.Child(i).IsLeaf())
@@ -171,9 +173,18 @@ def CompSentRW(t):
 def RCModRW(t):
     rcm = t.Find("rcmod")
     rcmobj = t.Child(rcm).Find("dobj")
+    t.Child(rcm).CheckAbsense("aux")
     CHECK(t.Child(rcm).Child(rcmobj).IsLeaf())
     t.children[rcm] = ("rcmod_" + t.Child(rcm).ChildStr(rcmobj),t.children[rcm][1])
     t.Child(rcm).Pop(rcmobj)
+    return t
+
+def AdvmodAmod(t):
+    amod = t.Find("amod")
+    advmod = t.Child(amod).Find("advmod")
+    CHECK(t.Child(amod).Child(advmod).IsLeaf())
+    t.Child(amod).Prepend(-1, advmod)
+    t.modified = True
     return t
 
 def AuxAposRW(t):
@@ -202,6 +213,7 @@ def RootRW(t):
 def AdvmodAsObjRW(t):
     advmod = t.Find("advmod")
     t.CheckAbsense("dobj")
+    t.CheckAbsense("cop")
     CHECK(t.Child(advmod).IsLeaf())
     t.Postpend(-1, advmod)
     return t
@@ -221,7 +233,10 @@ def PossRW(t):
     t.Pend(-1, l, True)
     return t
 
-
+def ExplSubjRW(t):
+    expl = t.Find("expl")
+    return br("nsubj", False)(t)
+    
 def br(typ, pre, prefix=None,suffix=None):
     def f(t):
         l = t.Find(typ)
@@ -234,7 +249,10 @@ def br(typ, pre, prefix=None,suffix=None):
         return t
     return f
 
-PreRules = [RCModRW]
+PreRules = [
+    RCModRW,
+    AdvmodAmod
+    ]
 Rules = [
     RootRW,
     NegAuxRW,
@@ -259,16 +277,17 @@ Rules = [
     br("preconj",True),
     br("ccomp",False),
     br("rcmod",False),
-    br("prep",False),
     PrepRW,
     br("neg", True),
     br("cop",True),
     br("aux", True),
     br("auxpass", True),
     br("xcomp", False),
+    ExplSubjRW,
     br("nsubj",True),
     br("nsubjpass",True),
-    br("advmod", True),
+    br("expl",True),
+    br("prep",True),
     br("tmod", True),
     br("mark",True),
     br("advcl",False),
@@ -354,6 +373,11 @@ def TestAll():
     Test("Each year a tight family should save 15 dollars at the pump")
     Test("Each year a tight family , a freak, should save 15 dollars at the pump")
     Test("I want our actions to tell every child in every neighborhood , your life matters, and we are as committed to improving your life chances as we are for our own kids")
+    Test("I am a really cool cat")
+    Test("I quickly ate the dog")
+    Test("I am really cool")
+    Test("There is a ghost in the room")
+    Test("For here there is no place that does not see you")
     
 def Reset(con, user):
     con.query("drop table %s_dependencies" % user)
@@ -390,11 +414,11 @@ def InsertSentence(con, user, sentence):
     for deps in depsa:
         txt = deps["text"].encode("utf8")
         try:
-            con.query("insert into %s_sentences(sentence) values(%%s)" % (user), txt)
-        except exception as e:
+            sid = str(con.execute("insert into %s_sentences(sentence) values(%%s)" % (user), txt))
+            print sid
+        except Exception as e:
             print "insert sentence error ", e
             continue
-        sid = con.query("select max(id) as i from %s_sentences where sentence = %%s" % (user), txt)[0]["i"]
         deps = deps["dependencies"]
         for at, gv, dp in deps:
             values = [sid, "'%s'" % at, "%s",  "%s", remove_word(gv), remove_word(dp)]
@@ -463,6 +487,7 @@ def HistogramSubsets(con, word, parent_arctype = None, user = None, **kwargs):
     hists = [([] if r["gc"] is None else r["gc"].split(","),int(r["c"])) for r in con.query(q, word)]
     disallowed = ["cc"]
     hists = [h for h in hists if len([x for x in h[0] if x in disallowed]) == 0]
+    hists = [h for h in hists if len([x for x in h[0] if x == "nsubj"]) < 2] # i simple cant even
     return hists
 
 def SubsetSelector(con, word, fixed_arc=None, **kwargs):
