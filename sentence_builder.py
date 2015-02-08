@@ -5,7 +5,7 @@ import copy
 from corenlp import StanfordCoreNLP
 
 # global NLP instance
-if False:
+if True:
     NLP = StanfordCoreNLP()
 
 def remove_id(word):
