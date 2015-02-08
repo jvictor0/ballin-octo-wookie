@@ -133,7 +133,7 @@ class GenerateHandler(BaseHandler):
 
 class SymbolsHandler(BaseHandler):
     @gen.coroutine
-    def post(self, user_id):
+    def post(self):
         try:
             params = self._params()
             text = params["text"].encode("utf-8")
