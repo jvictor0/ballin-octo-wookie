@@ -293,7 +293,6 @@ def FromDependTree(dt, verbose=False):
     
 def Test(sentence, verbose=False):
     print sentence
-    print NLP.parse(sentence)
     dt = ToDependTree(NLP.parse(sentence)["sentences"][0]["dependencies"],"ROOT-0")
     print dt
     dt.Rewrite(PreRules,verbose=verbose)
@@ -538,7 +537,7 @@ def GenerateWithSymbols(con, user, symbols):
         result = Generate(con, user, using)
         if not result is None:
             return result
-    Generate(con, user, None)
+    return Generate(con, user, None)
     
 
 
