@@ -83,6 +83,15 @@ class DependTree:
         c1 = self.ChildStr(src if pre else trg)
         c2 = self.ChildStr(trg if pre else src)
         sep = " " if c1[-1] != "'" and c2[0] != "'" and c2[:3] != "n't" else ""
+        # if c2[:2] == "'m" and not c1[-2:].lower() in [" i","i"]:
+        #     sep = " "
+        #     c2[0] = 'a'
+        # if c2[:2] == "'re" and not c1[-4:].lower() in [" you","you"]:
+        #     sep = " "
+        #     c2[0] = 'a'
+        # if c2[:2] == "'s" and c1[-1] == ",":
+        #     sep = " "
+        #     c2[0] = "i"
         newdata = c1 + sep + c2
         if trg == -1:
             self.data = newdata
@@ -181,7 +190,7 @@ def CompSentRW(t):
     return t
     
 def RCModRW(t):
-    rcm = t.Find("rcmod")
+    rcm = t.FindOne(["rcmod"])
     rcmobj = t.Child(rcm).Find("dobj")
     t.Child(rcm).CheckAbsense("aux")
     CHECK(t.Child(rcm).Child(rcmobj).IsLeaf())
@@ -189,11 +198,22 @@ def RCModRW(t):
     t.Child(rcm).Pop(rcmobj)
     return t
 
+def XCompCCompObjRW(t):
+    xcomp = t.Find("xcomp")
+    ccomp = t.Child(xcomp).Find("ccomp")
+    dobj  = t.Child(xcomp).Child(ccomp).Find("dobj")
+    t.Child(xcomp).Child(ccomp).CheckAbsense("aux")
+    CHECK(t.Child(xcomp).Child(ccomp).Child(dobj).IsLeaf())
+    children = t.Child(xcomp).Child(ccomp).children
+    children[dobj] = ("mark",children[dobj][1])
+    t.modified = True
+    return t
+
 def AdvmodAmod(t):
-    amod = t.FindOne(["amod","acomp","advmod"])
+    amod = t.FindOne(["amod","acomp","advmod","ccomp"])
     advmod = t.Child(amod).Find("advmod")
     CHECK(t.Child(amod).Child(advmod).IsLeaf())
-    t.Child(amod).Prepend(-1, advmod)
+    t.Child(amod).Pend(-1, advmod, t.children[amod][0] not in ["ccomp"])
     t.modified = True
     return t
 
@@ -269,7 +289,8 @@ def br(typ, pre, prefix=None,suffix=None):
 
 PreRules = [
     RCModRW,
-    AdvmodAmod
+    AdvmodAmod,
+    XCompCCompObjRW,
     ]
 Rules = [
     RootRW,
@@ -349,7 +370,7 @@ def Test(sentence, verbose=False):
     dt = ToDependTree(NLP.parse(sentence)["sentences"][0]["dependencies"],"ROOT-0")
     print dt
     result = FromDependTree(dt,verbose=verbose,printres=True)
-    assert result == sentence
+    assert result == sentence, "\n%s\n%s" % (result,sentence)
     print
 
 def TestAll(verbose=False):
@@ -424,6 +445,8 @@ def TestAll(verbose=False):
     Test("It isn't what keeps us strong",verbose=verbose)
     Test("She is working as hard as ever, but has to forego vacations",verbose=verbose)
     Test("We are any better off",verbose=verbose)
+    Test("It's not like all republicans were sent here to do stuff",verbose=verbose)
+    Test("It's not like all republicans were sent here to do what they want",verbose=verbose)
 
     
 def Reset(con, user):
