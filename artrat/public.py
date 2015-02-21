@@ -3,7 +3,7 @@ import database
 
 def Ingest(user, text):
     con = database.ConnectToMySQL()
-    con.query("use sentencebuilder")
+    con.query("use artrat")
     sb.DDL(con, user)
     try:
         sb.Ingest(con, text, user)
@@ -13,7 +13,7 @@ def Ingest(user, text):
 
 def Generate(user, symbols):
     con = database.ConnectToMySQL()
-    con.query("use sentencebuilder")
+    con.query("use artrat")
     dbs = {}
     try:
         gend, syms = sb.GenerateWithSymbols(con, user, symbols)
@@ -25,7 +25,7 @@ def Generate(user, symbols):
 
 def Reset(user):
     con = database.ConnectToMySQL()
-    con.query("use sentencebuilder")
+    con.query("use artrat")
     sb.Reset(con, user)
     return { "success": True }
 
