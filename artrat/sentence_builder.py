@@ -455,8 +455,8 @@ def Reset(con, user):
     DDL(con,user)
 
 def DDL(con, user):
-    con.query("create database if not exists sentencebuilder")
-    con.query("use sentencebuilder")
+    con.query("create database if not exists artrat")
+    con.query("use artrat")
     con.query(("create table if not exists %s_dependencies"
                "(sentence_id bigint"
                ",arctype varchar(255) charset utf8mb4 not null"
