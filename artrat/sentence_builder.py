@@ -509,7 +509,6 @@ def GetSymbols(text):
     result = {}
     for sentence in texts:
         sentence = sentence.encode("utf8")
-        print sentence
         depsa = NLP.parse(sentence.decode("utf8").encode("ascii","ignore"))["sentences"]
         for deps in depsa:
             dt = ToDependTree(deps["dependencies"],"ROOT-0")
@@ -600,14 +599,12 @@ def SeekToRoot(con, user, dependant):
         q = (("select governor, arctype from %s_dependencies "
               "where dependant = %%s"))
         q = q % user
-        print q
         rows = con.query(q,dependant.encode("utf8"))
         if len(rows) == 0:
             return []
         row = random.choice(rows)
         result.append((row["arctype"],dependant))
         dependant = row["governor"]
-    print result
     return result[-1::-1]
 
 g_last_generated = None
