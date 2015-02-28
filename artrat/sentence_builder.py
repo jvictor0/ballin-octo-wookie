@@ -2,10 +2,14 @@ import random
 import nltk.data
 import copy
 import client
+import corenlp
 
 HEIGHT_THROTTLER = 1.0
 
-NLP = client.StanfordNLP()
+NLP = None
+def InitNLP():
+    if NLP is None:
+        NLP = client.StanfordNLP()
 
 def remove_id(word):
     return word.count("-") == 0 and word or word[0:word.rindex("-")]
@@ -367,6 +371,7 @@ def FromDependTree(dt, verbose=False,printres=False):
     
 def Test(sentence, verbose=False):
     print sentence
+    InitNLP()
     dt = ToDependTree(NLP.parse(sentence)["sentences"][0]["dependencies"],"ROOT-0")
     print dt
     result = FromDependTree(dt,verbose=verbose,printres=True)
@@ -470,25 +475,32 @@ def DDL(con, user):
                ")") % user)
     con.query(("create table if not exists %s_sentences"
                "(id bigint primary key auto_increment"
-               ",sentence text charset utf8mb4)") % user)
+               ",sentence text charset utf8mb4"
+               ",source text default null)") % user)
 
 
 def InsertSentence(con, user, sentence):
     # if you SQL inject me I'll urinate on you
     sentence = sentence.encode("utf8")
     print sentence
-    nlp_parsed = NLP.parse(sentence.decode("utf8").encode("ascii","ignore"))
-    if not "sentences" in nlp_parsed:
-        return
+    if nlp_parsed is None:
+        InitNLP()
+        nlp_parsed = NLP.parse(sentence.decode("utf8").encode("ascii","ignore"))
     depsa = nlp_parsed["sentences"]
     for deps in depsa:
+        ProcessDependencies(con, user, deps)
+def ProcessDependencies(con, user, deps, source=None):
+    if True: # for indentation
         txt = deps["text"].encode("utf8")
         try:
-            sid = str(con.execute("insert into %s_sentences(sentence) values(%%s)" % (user), txt))
+            if source is None:
+                sid = str(con.execute("insert into %s_sentences(sentence) values(%%s)" % (user), txt))
+            else:
+                sid = str(con.execute("insert into %s_sentences(sentence,source) values(%%s,%%s)" % (user), (txt, source)))
             print sid
         except Exception as e:
             print "insert sentence error ", e
-            continue
+            return None
         deps = deps["dependencies"]
         for at, gv, dp in deps:
             values = [sid, "'%s'" % at, "%s",  "%s", remove_word(gv), remove_word(dp)]
@@ -501,7 +513,8 @@ def InsertSentence(con, user, sentence):
                 print "insert dep error", e
                 con.query("delete from %s_sentences where id = %s" % (user,sid))
                 con.query("delete from %s_dependencies where sentence_id = %s" % (user,sid))
-                break
+                return None
+        return sid
 
 def GetSymbols(text):
     tokenizer = nltk.data.load('tokenizers/punkt/english.pickle')
@@ -509,6 +522,7 @@ def GetSymbols(text):
     result = {}
     for sentence in texts:
         sentence = sentence.encode("utf8")
+        InitNLP()
         depsa = NLP.parse(sentence.decode("utf8").encode("ascii","ignore"))["sentences"]
         for deps in depsa:
             dt = ToDependTree(deps["dependencies"],"ROOT-0")
@@ -526,9 +540,8 @@ def Ingest(con, text, user):
         InsertSentence(con, user, sentence)
 
 def IngestFile(con, filename, user):
-    with open (filename, "r") as myfile:
-        data=myfile.read()
-        Ingest(con,data,user)
+    result = corenlp.ParseAndSaveFile(filename)
+    ProcessDependencies(con, user, result, filename)
 
 def RandomWeightedChoice(choices):
     total = sum(w for c, w in choices)

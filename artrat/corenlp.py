@@ -24,7 +24,7 @@ import os, re, sys, time, traceback
 import jsonrpc, pexpect
 from progressbar import ProgressBar, Fraction
 import logging
-
+import unidecode
 
 VERBOSE = False
 
@@ -35,6 +35,33 @@ CR_PATTERN = re.compile(r"\((\d*),(\d)*,\[(\d*),(\d*)\]\) -> \((\d*),(\d)*,\[(\d
 # initialize logger
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+jars = ["stanford-corenlp-3.4.1.jar",
+        "stanford-corenlp-3.4.1-models.jar",
+        "joda-time.jar",
+        "xom.jar",
+        "jollyday.jar"]
+
+# if CoreNLP libraries are in a different directory,
+# change the corenlp_path variable to point to them
+corenlp_path = "./stanford-corenlp-full-2014-08-27/"
+    
+java_path = "java"
+classname = "edu.stanford.nlp.pipeline.StanfordCoreNLP"
+# include the properties file, so you can change defaults
+# but any changes in output format will break parse_parser_results()
+props = "-props default.properties" 
+
+# add and check classpaths
+jars = [corenlp_path + jar for jar in jars]
+for jar in jars:
+    if not os.path.exists(jar):
+        logger.error("Error! Cannot locate %s" % jar)
+        sys.exit(1)
+        
+# spawn the server
+start_corenlp = "%s -Xmx1800m -cp %s %s %s" % (java_path, ':'.join(jars), classname, props)
+
 
 
 def remove_id(word):
@@ -129,37 +156,12 @@ class StanfordCoreNLP(object):
     Command-line interaction with Stanford's CoreNLP java utilities.
     Can be run as a JSON-RPC server or imported as a module.
     """
-    def __init__(self, corenlp_path=None):
+    def __init__(self):
         """
         Checks the location of the jar files.
         Spawns the server as a process.
         """
-        jars = ["stanford-corenlp-3.4.1.jar",
-                "stanford-corenlp-3.4.1-models.jar",
-                "joda-time.jar",
-                "xom.jar",
-                "jollyday.jar"]
-       
-        # if CoreNLP libraries are in a different directory,
-        # change the corenlp_path variable to point to them
-        if not corenlp_path:
-            corenlp_path = "./stanford-corenlp-full-2014-08-27/"
-        
-        java_path = "java"
-        classname = "edu.stanford.nlp.pipeline.StanfordCoreNLP"
-        # include the properties file, so you can change defaults
-        # but any changes in output format will break parse_parser_results()
-        props = "-props default.properties" 
-        
-        # add and check classpaths
-        jars = [corenlp_path + jar for jar in jars]
-        for jar in jars:
-            if not os.path.exists(jar):
-                logger.error("Error! Cannot locate %s" % jar)
-                sys.exit(1)
-        
-        # spawn the server
-        start_corenlp = "%s -Xmx1800m -cp %s %s %s" % (java_path, ':'.join(jars), classname, props)
+        print start_corenlp
         if VERBOSE: 
             logger.info(start_corenlp)
         self.corenlp = pexpect.spawn(start_corenlp)
@@ -190,11 +192,14 @@ class StanfordCoreNLP(object):
         # clean up anything leftover
         while True:
             try:
-                self.corenlp.read_nonblocking (4000, 0.3)
+                left = self.corenlp.read_nonblocking (4000, 0.3)
             except pexpect.TIMEOUT:
                 break
-        
-        self.corenlp.sendline(text)
+
+        while len(text) != 0:
+            amount = self.corenlp.send(text)
+            text = text[amount:]
+        self.corenlp.sendline("")
         # How much time should we give the parser to parse it?
         # the idea here is that you increase the timeout as a 
         # function of the text's length.
@@ -213,18 +218,20 @@ class StanfordCoreNLP(object):
                 time.sleep(0.0001)
             except pexpect.TIMEOUT:
                 if end_time - time.time() < 0:
+                    continue
                     logger.error("Error: Timeout with input '%s'" % (incoming))
                     return {'error': "timed out after %f seconds" % max_expected_time}
                 else:
                     continue
             except pexpect.EOF:
                 break
+
         
         if VERBOSE: 
             logger.info("%s\n%s" % ('='*40, incoming))
         try:
             results = parse_parser_results(incoming)
-        except Exception, e:
+        except Exception as e:
             if VERBOSE: 
                 logger.info(traceback.format_exc())
             raise e
@@ -242,6 +249,20 @@ class StanfordCoreNLP(object):
             logger.info("Response: '%s'" % (response))
         return response
 
+    def parse_file(self, filename):
+        try:
+            with open (filename, "r") as f:
+                data=unidecode.unidecode(f.read().decode("utf8").replace("\n"," "))
+        except Exception as e:
+        return self.parse(data)
+
+
+def ParseAndSaveFile(filename):
+    if not os.path.isfile(filename + ".parsed"):
+        os.system("cat %s | %s  >> %s.parsed" % (filename, start_corenlp, filename))
+    with open (filename + ".parsed", "r") as f:
+        data=f.read().decode("utf8")
+    return parse_parser_results(unidecode.unidecode(data)
 
 if __name__ == '__main__':
     """
@@ -258,6 +279,7 @@ if __name__ == '__main__':
     
     nlp = StanfordCoreNLP()
     server.register_function(nlp.parse)
+    server.register_function(nlp.parse_file)
     
     logger.info('Serving on http://%s:%s' % (options.host, options.port))
     server.serve()

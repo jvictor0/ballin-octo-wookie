@@ -25,15 +25,26 @@ class StanfordNLP:
     def get_server(self, host, port):
         return ServerProxy(JsonRpc20(),
                TransportTcpIp(addr=(host, port)))
-    
+
     def parse(self, text):
+        return self.doit(text, "parse")
+    def parse_file(self, text):
+        return self.doit(text, "parse_file")
+    
+    def doit(self, text, fun):
         last_e = None
         for _ in range(5):
             server = random.choice(self.servers)
             try:
-                res = server.parse(text)
+                if fun == "parse":
+                    res = server.parse(text)
+                elif fun == "parse_file":
+                    res = server.parse_file(text)
+                else:
+                    assert False, fun
                 break
             except RPCError as e:
+                print e
                 last_e = e
         else:
             raise last_e

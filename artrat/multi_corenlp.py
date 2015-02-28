@@ -19,6 +19,8 @@ class Wrapper(multiprocessing.Process):
 
         nlp = StanfordCoreNLP()
         server.register_function(nlp.parse)
+        server.register_function(nlp.parse_file)
+        print "registering parse_file"
         server.register_function(lambda *a, **k: 'pong', 'ping')
 
         try:
