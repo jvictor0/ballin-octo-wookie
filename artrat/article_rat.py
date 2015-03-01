@@ -1,29 +1,42 @@
 import newspaper as np
 from boilerpipe.extract import Extractor
-import os.path, os.system
+import os.path
+import os
 from unidecode import unidecode
-import sentencebuilder
+import public
 
-def RefreshArticles(domain, directory, personality, format_fn=lambda x:x):
+def Print(x):
+    print x
+
+def RefreshArticles(domain, directory, personality, log=Print):
     arts = np.build(domain, language='en', memoize_articles=False).articles
     print domain, "has %d articles" % len(arts)
     for art in arts:
         if not os.path.isfile(directory + "/" + art.url.replace("/","_")):
             art.download()
-            print art.url
+            log(art.url)
             try:
                 extractor = Extractor(extractor='ArticleSentencesExtractor', html=art.html)
             except Exception as e:
-                print e
+                log(e)
                 continue
             with open(directory + "/" + art.url.replace("/","_") + "_original","w") as f:
                 text = unidecode(extractor.getText())
                 print >>f, text
-                Process(directory, art.url.replace("/","_"), personality)
+                result = Process(directory, art.url.replace("/","_"), personality)
+                assert result["success"], result
 
 def Process(directory, filename, personality):
     fn = directory + "/" + filename + "_original"
     outfn = directory + "/" + filename + "_processed"
-    os.system("cp %s %s" % (fn, outfn))
-    os.system("sed -i 's/\[[0-9]*\]//g' " + outfn)
-    sentencebuilder.IngestFile(outfn)
+    os.system("cp '%s' '%s'" % (fn, outfn))
+    os.system("sed -i 's/\[[0-9]*\]//g' '" + outfn + "'")
+    public.IngestFile(personality, outfn)
+
+def Reset(directory, filename, personality):
+    public.Reset(personality)
+    articles = [a[:-len("_original")] for a in os.listdir(directory) if a.endswith("_original")]
+    for a in articles:
+        Process(directory, a, personality)
+    
+    

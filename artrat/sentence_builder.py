@@ -487,20 +487,19 @@ def InsertSentence(con, user, sentence):
         InitNLP()
         nlp_parsed = NLP.parse(sentence.decode("utf8").encode("ascii","ignore"))
     depsa = nlp_parsed["sentences"]
+    ProcessDependencies(con, user, depsa)
+def ProcessDependencies(con, user, depsa, source=None):
     for deps in depsa:
-        ProcessDependencies(con, user, deps)
-def ProcessDependencies(con, user, deps, source=None):
-    if True: # for indentation
         txt = deps["text"].encode("utf8")
         try:
             if source is None:
                 sid = str(con.execute("insert into %s_sentences(sentence) values(%%s)" % (user), txt))
             else:
-                sid = str(con.execute("insert into %s_sentences(sentence,source) values(%%s,%%s)" % (user), (txt, source)))
+                sid = str(con.execute("insert into %s_sentences(sentence,source) values(%%s,%%s)" % (user), txt, source))
             print sid
         except Exception as e:
             print "insert sentence error ", e
-            return None
+            continue
         deps = deps["dependencies"]
         for at, gv, dp in deps:
             values = [sid, "'%s'" % at, "%s",  "%s", remove_word(gv), remove_word(dp)]
@@ -513,8 +512,7 @@ def ProcessDependencies(con, user, deps, source=None):
                 print "insert dep error", e
                 con.query("delete from %s_sentences where id = %s" % (user,sid))
                 con.query("delete from %s_dependencies where sentence_id = %s" % (user,sid))
-                return None
-        return sid
+                break
 
 def GetSymbols(text):
     tokenizer = nltk.data.load('tokenizers/punkt/english.pickle')
@@ -541,7 +539,7 @@ def Ingest(con, text, user):
 
 def IngestFile(con, filename, user):
     result = corenlp.ParseAndSaveFile(filename)
-    ProcessDependencies(con, user, result, filename)
+    ProcessDependencies(con, user, result["sentences"], filename)
 
 def RandomWeightedChoice(choices):
     total = sum(w for c, w in choices)

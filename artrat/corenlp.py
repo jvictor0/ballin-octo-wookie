@@ -250,19 +250,17 @@ class StanfordCoreNLP(object):
         return response
 
     def parse_file(self, filename):
-        try:
-            with open (filename, "r") as f:
-                data=unidecode.unidecode(f.read().decode("utf8").replace("\n"," "))
-        except Exception as e:
+        with open (filename, "r") as f:
+            data=unidecode.unidecode(f.read().decode("utf8").replace("\n"," "))
         return self.parse(data)
 
 
 def ParseAndSaveFile(filename):
     if not os.path.isfile(filename + ".parsed"):
-        os.system("cat %s | %s  >> %s.parsed" % (filename, start_corenlp, filename))
+        os.system("cat '%s' | %s  >> '%s.parsed'" % (filename, start_corenlp, filename))
     with open (filename + ".parsed", "r") as f:
         data=f.read().decode("utf8")
-    return parse_parser_results(unidecode.unidecode(data)
+    return parse_parser_results(unidecode.unidecode(data))
 
 if __name__ == '__main__':
     """
