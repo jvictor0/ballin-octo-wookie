@@ -23,20 +23,20 @@ def RefreshArticles(domain, directory, personality, log=Print):
             with open(directory + "/" + art.url.replace("/","_") + "_original","w") as f:
                 text = unidecode(extractor.getText())
                 print >>f, text
-                result = Process(directory, art.url.replace("/","_"), personality)
+                result = Process(directory, art.url.replace("/","_"), personality, log)
                 assert result["success"], result
 
-def Process(directory, filename, personality):
+def Process(directory, filename, personality, log=Print):
     fn = directory + "/" + filename + "_original"
     outfn = directory + "/" + filename + "_processed"
     os.system("cp '%s' '%s'" % (fn, outfn))
     os.system("sed -i 's/\[[0-9]*\]//g' '" + outfn + "'")
     public.IngestFile(personality, outfn)
 
-def Reset(directory, filename, personality):
+def Reset(directory, personality, log=Print):
     public.Reset(personality)
     articles = [a[:-len("_original")] for a in os.listdir(directory) if a.endswith("_original")]
     for a in articles:
-        Process(directory, a, personality)
+        Process(directory, a, personality, log)
     
     
