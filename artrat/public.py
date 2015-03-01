@@ -11,12 +11,12 @@ def Ingest(user, text):
     except Exception as e:  # Complain if nessesary
         return { "success": False, "error": str(e) }
 
-def IngestFile(user, text):
+def IngestFile(user, text, log=sb.Print):
     con = database.ConnectToMySQL()
     con.query("use artrat")
     sb.DDL(con, user)
     try:
-        sb.IngestFile(con, text, user)
+        sb.IngestFile(con, text, user, log=log)
         return { "success": True }
     except Exception as e:  # Complain if nessesary
         return { "success": False, "error": str(e) }

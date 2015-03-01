@@ -44,13 +44,14 @@ jars = ["stanford-corenlp-3.4.1.jar",
 
 # if CoreNLP libraries are in a different directory,
 # change the corenlp_path variable to point to them
-corenlp_path = "./stanford-corenlp-full-2014-08-27/"
+abs_prefix = os.path.dirname(__file__)
+corenlp_path = abs_prefix + "/stanford-corenlp-full-2014-08-27/"
     
 java_path = "java"
 classname = "edu.stanford.nlp.pipeline.StanfordCoreNLP"
 # include the properties file, so you can change defaults
 # but any changes in output format will break parse_parser_results()
-props = "-props default.properties" 
+props = "-props %s/default.properties" % abs_prefix
 
 # add and check classpaths
 jars = [corenlp_path + jar for jar in jars]
@@ -257,7 +258,8 @@ class StanfordCoreNLP(object):
 
 def ParseAndSaveFile(filename):
     if not os.path.isfile(filename + ".parsed"):
-        os.system("cat '%s' | %s  >> '%s.parsed'" % (filename, start_corenlp, filename))
+        shellout = "cat '%s' | %s  >> '%s.parsed'" % (filename, start_corenlp, filename)
+        os.system(shellout)
     with open (filename + ".parsed", "r") as f:
         data=f.read().decode("utf8")
     return parse_parser_results(unidecode.unidecode(data))

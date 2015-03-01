@@ -3,6 +3,7 @@ import nltk.data
 import copy
 import client
 import corenlp
+from unidecode import unidecode
 
 HEIGHT_THROTTLER = 1.0
 
@@ -10,6 +11,9 @@ NLP = None
 def InitNLP():
     if NLP is None:
         NLP = client.StanfordNLP()
+
+def Print(x):
+    print x
 
 def remove_id(word):
     return word.count("-") == 0 and word or word[0:word.rindex("-")]
@@ -488,17 +492,17 @@ def InsertSentence(con, user, sentence):
         nlp_parsed = NLP.parse(sentence.decode("utf8").encode("ascii","ignore"))
     depsa = nlp_parsed["sentences"]
     ProcessDependencies(con, user, depsa)
-def ProcessDependencies(con, user, depsa, source=None):
+def ProcessDependencies(con, user, depsa, source=None, log=Print):
     for deps in depsa:
         txt = deps["text"].encode("utf8")
         try:
             if source is None:
                 sid = str(con.execute("insert into %s_sentences(sentence) values(%%s)" % (user), txt))
             else:
-                sid = str(con.execute("insert into %s_sentences(sentence,source) values(%%s,%%s)" % (user), txt, source))
-            print sid
+                sid = str(con.execute("insert into %s_sentences(sentence,source) values(%%s,%%s)" % (user), txt, unidecode(source)))
+            log("inserting (%s), sentence_id = %s" % (user,sid))
         except Exception as e:
-            print "insert sentence error ", e
+            log("insert sentence error " + str(e))
             continue
         deps = deps["dependencies"]
         for at, gv, dp in deps:
@@ -509,7 +513,7 @@ def ProcessDependencies(con, user, depsa, source=None):
                           remove_id(gv).lower().encode("utf8"),
                           remove_id(dp).lower().encode("utf8"))
             except Exception as e:
-                print "insert dep error", e
+                log("insert dep error " + str(e))
                 con.query("delete from %s_sentences where id = %s" % (user,sid))
                 con.query("delete from %s_dependencies where sentence_id = %s" % (user,sid))
                 break
@@ -537,9 +541,9 @@ def Ingest(con, text, user):
     for sentence in texts:
         InsertSentence(con, user, sentence)
 
-def IngestFile(con, filename, user):
+def IngestFile(con, filename, user, log=Print):
     result = corenlp.ParseAndSaveFile(filename)
-    ProcessDependencies(con, user, result["sentences"], filename)
+    ProcessDependencies(con, user, result["sentences"], filename, log=log)
 
 def RandomWeightedChoice(choices):
     total = sum(w for c, w in choices)
