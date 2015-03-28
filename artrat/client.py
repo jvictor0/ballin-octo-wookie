@@ -20,7 +20,7 @@ class StanfordNLP:
 
         print("Found %d corenlp servers" % len(self.servers))
         if not self.servers:
-            sys.exit(1)
+            assert False
 
     def get_server(self, host, port):
         return ServerProxy(JsonRpc20(),

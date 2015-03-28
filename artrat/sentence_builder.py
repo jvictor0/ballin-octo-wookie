@@ -3,12 +3,40 @@ import nltk.data
 import copy
 import client
 import corenlp
+import time
 from unidecode import unidecode
 
+
+# select group_id, agg(data)
+# from t outer_t
+# where exists
+#     (select * from t inner_t where inner_t.data = "specific data" and inner_t.data = outer_t.group_d)
+# group by group_id
+
 HEIGHT_THROTTLER = 1.0
+ARC_WILDNESS = {
+    "amod" : 0.5,
+    "num" : 0.5,
+    "iobj" : 0.5,
+    "dobj" : 0.5,
+    "vmod" : 0.5,
+    "rcmod" : 0.2,
+    "pobj" : 0.5,
+    "quantmod" : 0.5,
+    "nsubj" : 0.5,
+    "nsubjpass" : 0.5,
+    "csubj" : 0.25,
+    "number" : 0.5
+    }
+DEFAULT_PARAMS = {
+    "height_throttler" : HEIGHT_THROTTLER,
+    "arc_wildness" : ARC_WILDNESS
+    }
+
 
 NLP = None
 def InitNLP():
+    global NLP
     if NLP is None:
         NLP = client.StanfordNLP()
 
@@ -56,6 +84,9 @@ class DependTree:
             if not result is None:
                 return result
         CHECK(False)
+
+    def FindAll(self, typ):
+        return [i for i,a in enumerate(self.children) if a[0] == typ]
 
     def FindNoCheck(self,typ):
         cands = [i for i,a in enumerate(self.children) if a[0] == typ]
@@ -260,15 +291,24 @@ def AdvmodAsObjRW(t):
     advmod = t.Find("advmod")
     t.CheckAbsense("dobj")
     t.CheckAbsense("cop")
+    t.CheckAbsense("ccomp")
     CHECK(t.Child(advmod).IsLeaf())
     t.Postpend(-1, advmod)
     return t
 
 def AdvmodPassiveRW(t):
     advmod = t.Find("advmod")
-    pas = t.Find("nsubjpass")
+    pas = t.FindOne(["nsubjpass"])
     CHECK(t.Child(advmod).IsLeaf())
     t.Prepend(-1, advmod)
+    return t
+
+def AdvmodCSubjRW(t):
+    advmod = t.Find("advmod")
+    csubj = t.Find("csubj")
+    CHECK(t.Child(advmod).IsLeaf())
+    CHECK(t.Child(csubj).IsLeaf())
+    t.Prepend(csubj, advmod)
     return t
 
 def PossRW(t):
@@ -277,6 +317,26 @@ def PossRW(t):
     if not t.ChildStr(l) in ["his","her","my","their","your","our","its"]:
         t.children[l][1].data = t.ChildStr(l) + "'s"
     t.Pend(-1, l, True)
+    return t
+
+def MultiAuxRW(t):
+    auxs = t.FindAll("aux")
+    CHECK(len(auxs) > 1)
+    for a in auxs:
+        CHECK(t.Child(a).IsLeaf())
+    negs = t.FindAll("neg")
+    for a in negs:
+        CHECK(t.Child(a).IsLeaf())
+    auxstext = [t.ChildStr(a) for a in auxs + negs]
+    ordr = ["to","would","not","_","have"]
+    auxstext.sort(key = lambda itm : ordr.index(itm if itm in ordr else "_"))
+    for i in xrange(len(auxs)):
+        t.Pop(t.FindNoCheck("aux"))
+    for i in xrange(len(negs)):
+        t.Pop(t.FindNoCheck("neg"))
+    assert t.FindNoCheck("aux") is None
+    assert t.FindNoCheck("neg") is None
+    t.children.append(("aux",DependTree(" ".join(auxstext))))
     return t
 
 def ExplSubjRW(t):
@@ -302,12 +362,14 @@ PreRules = [
     ]
 Rules = [
     RootRW,
+    MultiAuxRW,
     NegAuxRW,
     NegCCompRW,
     AuxAposRW,
     br("nn", True),
     br("amod", True),
     br("num", True),
+    AdvmodCSubjRW,
     AdvmodPassiveRW,
     AdvmodAsObjRW,
     br("advmod", True),
@@ -331,12 +393,13 @@ Rules = [
     br("quantmod",True),
     br("neg", True),
     br("cop",True),
-    br("aux", True),
     br("auxpass", True),
+    br("aux", True),
     br("xcomp", False),
     ExplSubjRW,
     br("nsubj",True),
     br("nsubjpass",True),
+    br("csubj",True),
     br("expl",True),
     br("prep",False),
     br("tmod", True),
@@ -375,11 +438,12 @@ def FromDependTree(dt, verbose=False,printres=False):
     
 def Test(sentence, verbose=False):
     print sentence
+    global NLP
     InitNLP()
     dt = ToDependTree(NLP.parse(sentence)["sentences"][0]["dependencies"],"ROOT-0")
     print dt
     result = FromDependTree(dt,verbose=verbose,printres=True)
-    assert result == sentence, "\n%s\n%s" % (result,sentence)
+    assert result == sentence.strip(".").strip("!"), "\n%s\n%s" % (result,sentence)
     print
 
 def TestAll(verbose=False):
@@ -428,7 +492,7 @@ def TestAll(verbose=False):
     Test("I didn't eat the cow, and killed the chicken",verbose=verbose)
     Test("I didn't eat the cow, or kill the chicken",verbose=verbose)
     Test("I heard it's a dog",verbose=verbose)
-#    Test("Go fuck yourself!") # needs '!' to understand its a command, wont print '!,
+    Test("Go fuck yourself!") # needs '!' to understand its a command, wont print '!,
     Test("Fuck yourself",verbose=verbose)
     Test("If I were a cat I would be cute",verbose=verbose)
     Test("This plan truely helps the middle class",verbose=verbose)
@@ -456,6 +520,12 @@ def TestAll(verbose=False):
     Test("We are any better off",verbose=verbose)
     Test("It's not like all republicans were sent here to do stuff",verbose=verbose)
     Test("It's not like all republicans were sent here to do what they want",verbose=verbose)
+    Test("the schroeder bank allegedly helped marines recover from acl surgery", verbose=verbose)
+    Test("So eager were they to come that some are said to float over on tree-trunks.", verbose=verbose)
+    Test("So eager were they to come that some are said to have floated over on tree-trunks.", verbose=verbose)
+    Test("he changed my life, but would not have liked it", verbose=verbose)
+    Test("I would not have done that", verbose=verbose)
+    Test("Joseph's taste for blood has been well established",verbose=verbose)
 
     
 def Reset(con, user):
@@ -486,6 +556,7 @@ def DDL(con, user):
 def InsertSentence(con, user, sentence):
     # if you SQL inject me I'll urinate on you
     sentence = sentence.encode("utf8")
+    global NLP
     print sentence
     if nlp_parsed is None:
         InitNLP()
@@ -519,6 +590,7 @@ def ProcessDependencies(con, user, depsa, source=None, log=Print):
                 break
 
 def GetSymbols(text):
+    global NLP
     tokenizer = nltk.data.load('tokenizers/punkt/english.pickle')
     texts = tokenizer.tokenize(text.decode("utf8"))
     result = {}
@@ -560,32 +632,58 @@ def RandomWeightedChoice(choices):
 #    2) Not doing the join at all since we only use it to fill in the nulls for leaf nodes and get the grandparent arctype.
 #        both of these things could be added to the original table for only increase in rowcount and columnsize
 #        Then the only key we'd need is the one mentioned above
-def HistogramSubsets(con, word, parent_arctype = None, user = None, **kwargs):
-    subs =  ("(select group_concat(dr.arctype order by dr.arctype separator ',') as gc "
+def HistogramSubsets(con, word, parent_arctype = None, fixed_arc= None, fixed_word = None, user = None, **kwargs):
+    subs =  ("select dl.sentence_id as sid, dl.dependant_id as did, group_concat(dr.arctype separator ',') as gc "
              "from %s_dependencies dl left join %s_dependencies dr "
              "on dl.sentence_id = dr.sentence_id and dl.dependant_id = dr.governor_id "
              "where dl.dependant = %%s %s "
-             "group by dl.sentence_id, dl.dependant_id)")
-    subs = subs % (user, user, "" if parent_arctype is None else "and dl.arctype = '%s'" % parent_arctype)
-    q = "select subs.gc as gc, count(*) as c from %s subs group by subs.gc" % subs
-    hists = [([] if r["gc"] is None else r["gc"].split(","),int(r["c"])) for r in con.query(q, word)]
+             "group by dl.sentence_id, dl.dependant_id ")
+    extra_cond = ""
+    params = [word]
+    if not fixed_arc is None:
+        assert not fixed_word is None
+        print "fixed", fixed_word, fixed_arc, word, parent_arctype
+        extra_cond = ("and ('%s',%%s) in (select arctype, dependant from %s_dependencies where "
+                      "sentence_id = dl.sentence_id and governor_id = dl.dependant_id) ")
+        extra_cond = extra_cond % (fixed_arc, user)
+        params.append(fixed_word)
+    if not parent_arctype is None:
+        extra_cond += ("and dl.arctype = '%s'" % parent_arctype)
+    subs = subs % (user, user, extra_cond)
+    q = subs
+    hists = [([] if r["gc"] is None else r["gc"].split(","),r["sid"],r["did"]) for r in con.query(q, *params)]
     disallowed = ["cc"]
+    if len(hists) == 0:
+        assert False,  "before filtering no rows"
     hists = [h for h in hists if len([x for x in h[0] if x in disallowed]) == 0]
     hists = [h for h in hists if len([x for x in h[0] if x == "nsubj"]) < 2] # i simple cant even
     return hists
 
-def SubsetSelector(con, word, fixed_arc=None, height=0, **kwargs):
-    hist = HistogramSubsets(con, word, **kwargs)
+def SubsetSelector(con, word, fixed_arc=None, fixed_word = None,height=0, user=None, params = None, **kwargs):
+    if params is None:
+        params = DEFAULT_PARAMS
+    hist = HistogramSubsets(con, word, user=user, fixed_arc = fixed_arc, fixed_word = fixed_word, **kwargs)
     if not fixed_arc is None:
-        hist = [h for h in hist if fixed_arc in h[0]]
         for h in hist:
-            h[0].pop(h[0].index(fixed_arc))
+            assert fixed_arc in h[0]
     if len(hist) == 0:
+        assert False,  "generated no rows"
         return []
     for i in xrange(len(hist)):
-        denom = 1.0 if height == 0 else (HEIGHT_THROTTLER * float(height))**len(hist[i][0])
-        hist[i] = (hist[i][0], float(hist[i][1])/denom)
-    return RandomWeightedChoice(hist)
+        denom = 1.0 if height == 0 else (params["height_throttler"] * float(height))**len(hist[i][0])
+        hist[i] = (hist[i], 1.0/denom)
+    result_entry = RandomWeightedChoice(hist)
+    q = "select * from %s_dependencies where sentence_id = %s and governor_id = %s" % (user, result_entry[1], result_entry[2])
+    print con.query("select sentence from %s_sentences where id = %s" % (user, result_entry[1]))[0]["sentence"]
+    result = [(r["arctype"], r["dependant"]) for r in con.query(q)]
+    if not fixed_arc is None:
+        result.pop(result.index((fixed_arc, fixed_word)))
+    for i in xrange(len(result)):
+        if result[i][0] in params["arc_wildness"] and random.random() < params["arc_wildness"][result[i][0]]:
+            next_word = RandomDependant(con, user, word, result[i][0])
+            print "   (%s) %s -> %s" % (result[i][0], result[i][1], next_word)
+            result[i] = (result[i][0], next_word)
+    return result
 
 def RandomDependant(con, user, gov, arctype):
     q = "select dependant from %s_dependencies where governor = %%s and arctype = %%s" % user
@@ -595,10 +693,11 @@ def Expand(con, word, height=0, user=None, fixed_chain = None, **kwargs):
     if not fixed_chain is None and len(fixed_chain) == 0:
         fixed_chain = None
     arctypes = SubsetSelector(con, word, user=user, height = height, 
-                              fixed_arc = fixed_chain[0][0] if not fixed_chain is None else None, **kwargs)
+                              fixed_arc  = fixed_chain[0][0] if not fixed_chain is None else None,
+                              fixed_word = fixed_chain[0][1] if not fixed_chain is None else None, **kwargs)
     outs = []
-    for at in arctypes:
-        outs.append((at,Expand(con, RandomDependant(con, user, word, at),
+    for at,dep in arctypes:
+        outs.append((at,Expand(con, dep,
                                height = height + 1, user=user, fixed_chain=None, parent_arctype=at)))
     if not fixed_chain is None:
         outs.append((fixed_chain[0][0],
@@ -610,16 +709,26 @@ def Expand(con, word, height=0, user=None, fixed_chain = None, **kwargs):
 # SeekToRoot :: dependant -> [(arctype, dependant)]
 def SeekToRoot(con, user, dependant):
     result = []
-    while dependant != "root":
-        q = (("select governor, arctype from %s_dependencies "
-              "where dependant = %%s"))
-        q = q % user
-        rows = con.query(q,dependant.encode("utf8"))
-        if len(rows) == 0:
-            return []
+    q = (("select governor, arctype from %s_dependencies "
+          "where dependant = %%s"))
+    q = q % user
+    rows = con.query(q,dependant.encode("utf8"))
+    if len(rows) == 0:
+        return []
+    row = random.choice(rows)
+    result.append((row["arctype"],dependant))
+    dependant = row['governor']
+    while dependant != 'root':
+        q = (("select sentence_id as sid, governor_id as gid from %s_dependencies "
+              "where arctype = '%s' and governor = %%s and dependant = %%s"))
+        q = q % (user, result[-1][0])
+        rows = con.query(q, dependant, result[-1][1])
+        assert len(rows) != 0
         row = random.choice(rows)
-        result.append((row["arctype"],dependant))
-        dependant = row["governor"]
+        rows = con.query("select governor, arctype from %s_dependencies where sentence_id = %s and dependant_id = %s" % (user, row["sid"], row["gid"]))
+        assert len(rows) == 1, rows
+        result.append((rows[0]['arctype'], dependant))
+        dependant = rows[0]['governor']
     return result[-1::-1]
 
 g_last_generated = None
@@ -629,6 +738,7 @@ def Generate(con, user, using=None):
         fixed_chain = SeekToRoot(con, user, using)
         if len(fixed_chain) == 0:
             return None
+        print fixed_chain
         word = fixed_chain[0][1]
         fixed_chain.pop(0)
     else:
@@ -637,6 +747,11 @@ def Generate(con, user, using=None):
     global g_last_generated
     result = Expand(con, word, parent_arctype='root', user=user, fixed_chain=fixed_chain)
     g_last_generated = copy.deepcopy(result)
+    return result
+
+def GenerateAndExpand(con, user, using=None):
+    result = FromDependTree(Generate(con, user, using=using))
+    print g_last_generated
     return result
 
 def GenerateWithSymbols(con, user, symbols):

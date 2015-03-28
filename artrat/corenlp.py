@@ -45,7 +45,7 @@ jars = ["stanford-corenlp-3.4.1.jar",
 # if CoreNLP libraries are in a different directory,
 # change the corenlp_path variable to point to them
 abs_prefix = os.path.dirname(__file__)
-corenlp_path = abs_prefix + "/stanford-corenlp-full-2014-08-27/"
+corenlp_path = os.path.join(abs_prefix,"stanford-corenlp-full-2014-08-27/")
     
 java_path = "java"
 classname = "edu.stanford.nlp.pipeline.StanfordCoreNLP"
@@ -58,7 +58,7 @@ jars = [corenlp_path + jar for jar in jars]
 for jar in jars:
     if not os.path.exists(jar):
         logger.error("Error! Cannot locate %s" % jar)
-        sys.exit(1)
+        assert False
         
 # spawn the server
 start_corenlp = "%s -Xmx1800m -cp %s %s %s" % (java_path, ':'.join(jars), classname, props)
