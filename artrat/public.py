@@ -15,10 +15,13 @@ def IngestFile(user, text, log=sb.Print):
     con = database.ConnectToMySQL()
     con.query("use artrat")
     sb.DDL(con, user)
+    con.query("begin")
     try:
         sb.IngestFile(con, text, user, log=log)
+        con.query("commit")
         return { "success": True }
     except Exception as e:  # Complain if nessesary
+        con.query("rollback")
         return { "success": False, "error": str(e) }
 
 def Generate(user, symbols):

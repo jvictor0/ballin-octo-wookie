@@ -789,3 +789,5 @@ def GetImportantWords(parsetree, nlp):
     return result
             
 
+if __name__ == "__main__":
+    TestAll()
