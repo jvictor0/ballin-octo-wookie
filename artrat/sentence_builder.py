@@ -5,7 +5,7 @@ import client
 import corenlp
 import time
 from unidecode import unidecode
-
+import database
 
 # select group_id, agg(data)
 # from t outer_t
@@ -615,7 +615,13 @@ def Ingest(con, text, user):
 
 def IngestFile(con, filename, user, log=Print):
     result = corenlp.ParseAndSaveFile(filename)
-    ProcessDependencies(con, user, result["sentences"], filename, log=log)
+    con.query("begin")
+    try:        
+        ProcessDependencies(con, user, result["sentences"], filename, log=log)
+        con.query("commit")
+    except Exception:
+        con.query("rollback")
+        raise
 
 def RandomWeightedChoice(choices):
     total = sum(w for c, w in choices)
@@ -642,7 +648,6 @@ def HistogramSubsets(con, word, parent_arctype = None, fixed_arc= None, fixed_wo
     params = [word]
     if not fixed_arc is None:
         assert not fixed_word is None
-        print "fixed", fixed_word, fixed_arc, word, parent_arctype
         extra_cond = ("and ('%s',%%s) in (select arctype, dependant from %s_dependencies where "
                       "sentence_id = dl.sentence_id and governor_id = dl.dependant_id) ")
         extra_cond = extra_cond % (fixed_arc, user)
@@ -659,7 +664,7 @@ def HistogramSubsets(con, word, parent_arctype = None, fixed_arc= None, fixed_wo
     hists = [h for h in hists if len([x for x in h[0] if x == "nsubj"]) < 2] # i simple cant even
     return hists
 
-def SubsetSelector(con, word, fixed_arc=None, fixed_word = None,height=0, user=None, params = None, **kwargs):
+def SubsetSelector(con, word, fixed_arc=None, fixed_word = None,height=0, user=None, params = None, dbg_out={}, **kwargs):
     if params is None:
         params = DEFAULT_PARAMS
     hist = HistogramSubsets(con, word, user=user, fixed_arc = fixed_arc, fixed_word = fixed_word, **kwargs)
@@ -674,8 +679,13 @@ def SubsetSelector(con, word, fixed_arc=None, fixed_word = None,height=0, user=N
         hist[i] = (hist[i], 1.0/denom)
     result_entry = RandomWeightedChoice(hist)
     q = "select * from %s_dependencies where sentence_id = %s and governor_id = %s" % (user, result_entry[1], result_entry[2])
-    print con.query("select sentence from %s_sentences where id = %s" % (user, result_entry[1]))[0]["sentence"]
     result = [(r["arctype"], r["dependant"]) for r in con.query(q)]
+
+    if "used_list" not in dbg_out:
+        dbg_out["used_list"] = []
+    if len(result) != 0:
+        dbg_out["used_list"].append(int(result_entry[1]))
+
     if not fixed_arc is None:
         result.pop(result.index((fixed_arc, fixed_word)))
     for i in xrange(len(result)):
@@ -689,20 +699,21 @@ def RandomDependant(con, user, gov, arctype):
     q = "select dependant from %s_dependencies where governor = %%s and arctype = %%s" % user
     return random.choice(con.query(q,gov,arctype))['dependant']
         
-def Expand(con, word, height=0, user=None, fixed_chain = None, **kwargs):
+def Expand(con, word, height=0, user=None, fixed_chain = None, dbg_out = {}, **kwargs):
     if not fixed_chain is None and len(fixed_chain) == 0:
         fixed_chain = None
     arctypes = SubsetSelector(con, word, user=user, height = height, 
                               fixed_arc  = fixed_chain[0][0] if not fixed_chain is None else None,
-                              fixed_word = fixed_chain[0][1] if not fixed_chain is None else None, **kwargs)
+                              fixed_word = fixed_chain[0][1] if not fixed_chain is None else None, 
+                              dbg_out = dbg_out, **kwargs)
     outs = []
     for at,dep in arctypes:
         outs.append((at,Expand(con, dep,
-                               height = height + 1, user=user, fixed_chain=None, parent_arctype=at)))
+                               height = height + 1, user=user, fixed_chain=None, parent_arctype=at, dbg_out=dbg_out)))
     if not fixed_chain is None:
         outs.append((fixed_chain[0][0],
                      Expand(con, fixed_chain[0][1],
-                            height = height + 1, user=user,
+                            height = height + 1, user=user,  dbg_out=dbg_out,
                             fixed_chain=fixed_chain[1:], parent_arctype=fixed_chain[0][0])))
     return DependTree(word,outs)
 
@@ -733,24 +744,27 @@ def SeekToRoot(con, user, dependant):
 
 g_last_generated = None
 
-def Generate(con, user, using=None):
+def Generate(con, user, using=None, dbg_out={}):
     if not using is None:
         fixed_chain = SeekToRoot(con, user, using)
         if len(fixed_chain) == 0:
             return None
-        print fixed_chain
         word = fixed_chain[0][1]
         fixed_chain.pop(0)
     else:
         fixed_chain = None
         word = random.choice(con.query("select dependant from %s_dependencies where arctype = 'root'" % user))['dependant']
     global g_last_generated
-    result = Expand(con, word, parent_arctype='root', user=user, fixed_chain=fixed_chain)
+    result = Expand(con, word, parent_arctype='root', user=user, fixed_chain=fixed_chain,dbg_out=dbg_out)
     g_last_generated = copy.deepcopy(result)
     return result
 
-def GenerateAndExpand(con, user, using=None):
-    result = FromDependTree(Generate(con, user, using=using))
+def GenerateAndExpand(user, using=None):
+    con = database.ConnectToMySQL()
+    con.query("use artrat")
+    dbg_out = { "used_list" : [] }
+    result = FromDependTree(Generate(con, user, using=using,dbg_out=dbg_out))
+    print "sentences_used" , set(dbg_out["used_list"])
     print g_last_generated
     return result
 
@@ -767,6 +781,15 @@ def GenerateWithSymbols(con, user, symbols):
     syms = GetImportantWords(DependTree("root", [("root",result)]), { "words" : []})
     return result, syms
     
+def PrintSentences(user,sids):
+    for s in sids:
+        PrintSentence(user,s)
+
+
+def PrintSentence(user,sid):
+    con = database.ConnectToMySQL()
+    con.query("use artrat")
+    print con.query("select * from %s_sentences where id = %d" % (user,sid))[0]['sentence']
 
 def GetImportantWords(parsetree, nlp):
     root = parsetree.Child(parsetree.Find("root"))

@@ -15,7 +15,7 @@ def ArticleRat(directory, the_personalities, log=Print):
         random.shuffle(the_personalities)
         for p, d in the_personalities:
             RefreshArticles(d, os.path.join(directory,p), p, log=log, timeout=60*60)
-        sleep(t0 - 12 * 60 * 60) # dont refresh the same article in 12 hours
+        time.sleep(t0 - 12 * 60 * 60) # dont refresh the same article in 12 hours
 
 def RefreshArticles(domain, directory, personality, log=Print, timeout=None):
     start_time = time.time()
@@ -23,8 +23,9 @@ def RefreshArticles(domain, directory, personality, log=Print, timeout=None):
     log(domain + " has %d articles" % len(arts))
     for art in arts:
         if not timeout is None and time.time() - start_time > timeout:
+            log("Timeout after %f secons" % (time.time() - start_time))
             return
-        hashd_fn = hashlib.sha256(art.url).hexdigest()
+        hashd_fn = hashlib.sha256(unidecode(art.url)).hexdigest()
         base_fn = directory + "/" + hashd_fn
         orig_fn = base_fn + "_original"
         if not os.path.isfile(orig_fn):
