@@ -36,8 +36,8 @@ CR_PATTERN = re.compile(r"\((\d*),(\d)*,\[(\d*),(\d*)\]\) -> \((\d*),(\d)*,\[(\d
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-jars = ["stanford-corenlp-3.4.1.jar",
-        "stanford-corenlp-3.4.1-models.jar",
+jars = ["stanford-corenlp-3.5.1.jar",
+        "stanford-corenlp-3.5.1-models.jar",
         "joda-time.jar",
         "xom.jar",
         "jollyday.jar"]
@@ -45,13 +45,13 @@ jars = ["stanford-corenlp-3.4.1.jar",
 # if CoreNLP libraries are in a different directory,
 # change the corenlp_path variable to point to them
 abs_prefix = os.path.dirname(__file__)
-corenlp_path = os.path.join(abs_prefix,"stanford-corenlp-full-2014-08-27/")
+corenlp_path = os.path.join(abs_prefix,"stanford-corenlp-full-2015-01-29/")
     
 java_path = "java"
 classname = "edu.stanford.nlp.pipeline.StanfordCoreNLP"
 # include the properties file, so you can change defaults
 # but any changes in output format will break parse_parser_results()
-props = "-props %s/default.properties" % abs_prefix
+props = "-props %s" % os.path.join(abs_prefix,"default.properties")
 
 # add and check classpaths
 jars = [corenlp_path + jar for jar in jars]
