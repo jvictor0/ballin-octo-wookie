@@ -30,7 +30,8 @@ ARC_WILDNESS = {
     }
 DEFAULT_PARAMS = {
     "height_throttler" : HEIGHT_THROTTLER,
-    "arc_wildness" : ARC_WILDNESS
+    #    "arc_wildness" : ARC_WILDNESS
+    "arc_wildness" : { }
     }
 
 
@@ -73,10 +74,10 @@ class DependTree:
     def __str__(self):
         return self.Print("","")
 
-    def Find(self,typ):
+    def Find(self,typ, desc=False):
         cands = [i for i,a in enumerate(self.children) if a[0] == typ]
         CHECK(len(cands) != 0)
-        return cands[0]
+        return cands[-1 if desc else 0]
 
     def FindOne(self,typ):
         for t in typ:
@@ -88,9 +89,9 @@ class DependTree:
     def FindAll(self, typ):
         return [i for i,a in enumerate(self.children) if a[0] == typ]
 
-    def FindNoCheck(self,typ):
+    def FindNoCheck(self,typ, desc=False):
         cands = [i for i,a in enumerate(self.children) if a[0] == typ]
-        return cands[0] if len(cands) != 0 else None
+        return cands[-1 if desc else 0] if len(cands) != 0 else None
 
     def CheckAbsense(self,typ):
         cands = [i for i,a in enumerate(self.children) if a[0] == typ]
@@ -103,6 +104,9 @@ class DependTree:
 
     def Child(self,i):
         return self.children[i][1]
+
+    def Arc(self,i):
+        return self.children[i][0]
     
     def ChildStr(self,i):
         if i == -1:
@@ -145,6 +149,9 @@ class DependTree:
     def Prepend(self, trg, src):
         self.Pend(trg, src, True)
 
+    def Modified(self):
+        return self.modified or len([a for a in self.children if a[1].Modified()]) > 0
+
     def Rewrite(self,rules,depth=0,verbose=False):
         while True:
             for i in xrange(len(self.children)):
@@ -157,12 +164,13 @@ class DependTree:
                     self.modified=False
                     r(self)
                     if verbose:
+                        print ("  "*depth) + ("(%s)" % r)
                         print ("  "*depth) + strself
                         print ("  "*depth) + "  --->  " + self.Print("  "*(depth + 4),"")
                     change = True
                     break
                 except NoRewriteError as e:
-                    assert not self.modified
+                    assert not self.Modified()
             if not change:
                 break
         return self # cause why not
@@ -172,6 +180,22 @@ class DependTree:
             "data" : self.data,
             "children" : [{"arctype" : c1, "child" : c2.ToDict()} for c1,c2 in self.children]
             }
+
+
+    # Transform in the sense of composable testing
+    #
+    def Transform(self, arc, target):
+        for i in xrange(len(self.children)):
+            if self.Arc(i) == arc:
+                subrr = FromDependTree(self.Child(i))
+                if subrr[0].isupper():
+                    target = target[0].upper() + target[1:]
+                self.children[i] = (self.Arc(i), DependTree(target))
+                return True
+        for i in xrange(len(self.children)):
+            if self.Child(i).Transform(arc, target):
+                return True
+        return False
     
 def CHECK(a):
     if not a:
@@ -271,6 +295,15 @@ def NegAuxRW(t):
     t.Postpend(aux, neg)
     return t
 
+def QuantmodDepRW(t):
+    quantmod = t.Find("quantmod")
+    dep = t.Find("dep")
+    CHECK(t.Child(quantmod).IsLeaf())
+    CHECK(t.Child(dep).IsLeaf())
+    t.Prepend(quantmod, dep)
+    return t
+    t.Prepend(-1, t.Find("dep"))
+
 def NegCCompRW(t):
     neg = t.Find("neg")
     aux = t.Find("ccomp")
@@ -292,6 +325,7 @@ def AdvmodAsObjRW(t):
     t.CheckAbsense("dobj")
     t.CheckAbsense("cop")
     t.CheckAbsense("ccomp")
+    t.CheckAbsense("dep")
     CHECK(t.Child(advmod).IsLeaf())
     t.Postpend(-1, advmod)
     return t
@@ -305,7 +339,7 @@ def AdvmodPassiveRW(t):
 
 def AdvmodCSubjRW(t):
     advmod = t.Find("advmod")
-    csubj = t.Find("csubj")
+    csubj = t.FindOne(["csubj"])
     CHECK(t.Child(advmod).IsLeaf())
     CHECK(t.Child(csubj).IsLeaf())
     t.Prepend(csubj, advmod)
@@ -343,9 +377,9 @@ def ExplSubjRW(t):
     expl = t.Find("expl")
     return br("nsubj", False)(t)
     
-def br(typ, pre, prefix=None,suffix=None):
+def br(typ, pre, prefix=None,suffix=None, desc=False):
     def f(t):
-        l = t.Find(typ)
+        l = t.Find(typ, desc=desc)
         CHECK(t.Child(l).IsLeaf())
         if not prefix is None:
             t.children[l][1].data = prefix + t.ChildStr(l)
@@ -366,13 +400,15 @@ Rules = [
     NegAuxRW,
     NegCCompRW,
     AuxAposRW,
-    br("nn", True),
+    br("nn", True, desc=True),
     br("amod", True),
     br("num", True),
     AdvmodCSubjRW,
     AdvmodPassiveRW,
     AdvmodAsObjRW,
     br("advmod", True),
+    QuantmodDepRW,
+    br("quantmod",True),
     br("det", True),
     br("predet", True),
     br("prt", False),
@@ -390,7 +426,6 @@ Rules = [
     br("rcmod",False),
     PrepRW,
     br("pobj",False),
-    br("quantmod",True),
     br("neg", True),
     br("cop",True),
     br("auxpass", True),
@@ -408,7 +443,7 @@ Rules = [
     br("mark",True),
     br("advcl",False,prefix=", ",suffix=","),
     br("appos",False,prefix=", ",suffix=","),
-    br("parataxis",False,prefix=", ",suffix=","),
+    br("parataxis",False,prefix="; ",suffix=","),
     br("discourse",True,prefix=", ",suffix=","),
     ]
 
@@ -436,97 +471,110 @@ def FromDependTree(dt, verbose=False,printres=False):
     return FixPunctuation(dt.data)
     
     
-def Test(sentence, verbose=False):
+def Test(sentence, verbose=False, transforms=[], exempt=[]):
     print sentence
     global NLP
     InitNLP()
     dt = ToDependTree(NLP.parse(sentence)["sentences"][0]["dependencies"],"ROOT-0")
     print dt
-    result = FromDependTree(dt,verbose=verbose,printres=True)
+    result = FromDependTree(copy.deepcopy(dt),verbose=verbose,printres=True)
     assert result == sentence.strip(".").strip("!"), "\n%s\n%s" % (result,sentence)
+    for arc,tg in transforms:
+        if arc in exempt:
+            continue
+        dtcopy = copy.deepcopy(dt)
+        if dtcopy.Transform(arc,tg):            
+            result = FromDependTree(dtcopy,verbose=verbose,printres=False)
+            Test(result, verbose=verbose)
     print
 
-def TestAll(verbose=False):
-    Test("dog eats",verbose=verbose)
-    Test("dog eats cat",verbose=verbose)
-    Test("the dog eats the cat",verbose=verbose)
-    Test("the scary dog eats the big cat",verbose=verbose)
-    Test("the scary dog eats the big cat, and the smelly rat",verbose=verbose)
-#    Test("the dog kills and eats the cat",verbose=verbose)
-    Test("the dog is scary",verbose=verbose)
-    Test("the dog will be scary",verbose=verbose)
-    Test("the dog is not scary",verbose=verbose)
-    Test("the dog is not by the barn",verbose=verbose)
-    Test("the dog will not be the president",verbose=verbose)
-    Test("I am the greatest president",verbose=verbose)
-    Test("You shall not pass up this chance to sleep with me",verbose=verbose)
-    Test("You shall not pass up this chance to make out with me",verbose=verbose)
-    Test("Paula handed the keys to her father",verbose=verbose)
-    Test("Paula handed her father the keys",verbose=verbose)
-    Test("The crazy, and cute, dog is not awesome",verbose=verbose)
-    Test("The crazy, but not cute, dog is not awesome",verbose=verbose)
-    Test("The crazy, and not cute, dog is not awesome",verbose=verbose)
-    Test("The not crazy, and not cute, dog is not awesome",verbose=verbose)
-    Test("The not crazy, but cute, dog is not awesome",verbose=verbose)
-    Test("The dog that mother ate is cute",verbose=verbose)
-    Test("I saw the book which you bought",verbose=verbose)
-    Test("I saw the book which you bought in the attic",verbose=verbose)
-    Test("They shut down the station",verbose=verbose)
-    Test("He purchased it without paying a premium",verbose=verbose)
-    Test("I saw a cat with a telescope",verbose=verbose)
-    Test("All the boys are here",verbose=verbose)
-    Test("The boys, and the girls, are here",verbose=verbose)
-    Test("I love Bill's clothes",verbose=verbose)
-    Test("I love its cool clothes",verbose=verbose)
-    Test("We have no information on whether users are at risk",verbose=verbose)
-    Test("They heard about your missing classes",verbose=verbose)
-    Test("We're annoyed let's face it",verbose=verbose)
-    Test("He says that you like to swim",verbose=verbose)
-    Test("I am certain that he did it",verbose=verbose)
-    Test("I admire the fact that you are honest",verbose=verbose)
-#    Test("What she said is not true",verbose=verbose)
-#    Test("What she said is totally not true",verbose=verbose)
-    Test("She said what is true",verbose=verbose)
-    Test("I ate the cow, and killed the chicken",verbose=verbose)
-    Test("I ate the cow, and didn't kill the chicken",verbose=verbose)
-    Test("I didn't eat the cow, and killed the chicken",verbose=verbose)
-    Test("I didn't eat the cow, or kill the chicken",verbose=verbose)
-    Test("I heard it's a dog",verbose=verbose)
-    Test("Go fuck yourself!") # needs '!' to understand its a command, wont print '!,
-    Test("Fuck yourself",verbose=verbose)
-    Test("If I were a cat I would be cute",verbose=verbose)
-    Test("This plan truely helps the middle class",verbose=verbose)
-    Test("Members of both parties have told me so",verbose=verbose)
-    Test("I will send this Congress a budget filled with ideas that are practical in two weeks",verbose=verbose)
-    Test("Each year a tight family should save 15 dollars at the pump",verbose=verbose)
-    Test("Each year a tight family, a freak, should save 15 dollars at the pump",verbose=verbose)
-    Test("I want our actions to tell every child in every neighborhood, your life matters, and we are as committed to improving your life chances, as we are for our own kids",verbose=verbose)
-    Test("I am a really cool cat",verbose=verbose)
-    Test("I quickly ate the dog",verbose=verbose)
-    Test("I am really cool",verbose=verbose)
-    Test("There is a ghost in the room",verbose=verbose)
-    Test("There is no place that does not see you for here",verbose=verbose)
-    Test("Yes, passions fly still, but we can surely overcome our differences",verbose=verbose)
-    Test("We're slashing the backlog",verbose=verbose)
-    Test("She looks very beautiful",verbose=verbose)
-    Test("We are as good as ever",verbose=verbose)
-    Test("I want just one",verbose=verbose)
-    Test("I want more than one",verbose=verbose)
-    Test("He cried because of you",verbose=verbose)
-    Test("I have 3.2 billion dollars",verbose=verbose)
-    Test("It's not what keeps us strong",verbose=verbose)
-    Test("It isn't what keeps us strong",verbose=verbose)
-    Test("She is working as hard as ever, but has to forego vacations",verbose=verbose)
-    Test("We are any better off",verbose=verbose)
-    Test("It's not like all republicans were sent here to do stuff",verbose=verbose)
-    Test("It's not like all republicans were sent here to do what they want",verbose=verbose)
-    Test("the schroeder bank allegedly helped marines recover from acl surgery", verbose=verbose)
-    Test("So eager were they to come that some are said to float over on tree-trunks.", verbose=verbose)
-    Test("So eager were they to come that some are said to have floated over on tree-trunks.", verbose=verbose)
-    Test("he changed my life, but would not have liked it", verbose=verbose)
-    Test("I would not have done that", verbose=verbose)
-    Test("Joseph's taste for blood has been well established",verbose=verbose)
+transforms = [("dobj","tens of thousands of people"),
+              ("nsubj","tens of thousands of people")]
 
+def TestAll(**kwargs):
+    Test("dog eats",**kwargs)
+    Test("dog eats cat",**kwargs)
+    Test("the dog eats the cat",**kwargs)
+    Test("the scary dog eats the big cat",**kwargs)
+    Test("the scary dog eats the big cat, and the smelly rat",**kwargs)
+#    Test("the dog kills and eats the cat",**kwargs)
+    Test("the dog is scary",**kwargs)
+    Test("the dog will be scary",**kwargs)
+    Test("the dog is not scary",**kwargs)
+    Test("the dog is not by the barn",**kwargs)
+    Test("the dog will not be the president",**kwargs)
+    Test("I am the greatest president",**kwargs)
+    Test("You shall not pass up this chance to sleep with me",**kwargs)
+    Test("You shall not pass up this chance to make out with me",**kwargs)
+    Test("Paula handed the keys to her father",**kwargs)
+    Test("Paula handed her father the keys",**kwargs)
+    Test("The crazy, and cute, dog is not awesome",**kwargs)
+    Test("The crazy, but not cute, dog is not awesome",**kwargs)
+    Test("The crazy, and not cute, dog is not awesome",**kwargs)
+    Test("The not crazy, and not cute, dog is not awesome",**kwargs)
+    Test("The not crazy, but cute, dog is not awesome",**kwargs)
+    Test("The dog that mother ate is cute",exempt=["dobj"], **kwargs)
+    Test("I saw the book which you bought",**kwargs)
+    Test("I saw the book which you bought in the attic",**kwargs)
+    Test("They shut down the station",**kwargs)
+    Test("He purchased it without paying a premium",**kwargs)
+    Test("I saw a cat with a telescope",**kwargs)
+    Test("All the boys are here",**kwargs)
+    Test("The boys, and the girls, are here",**kwargs)
+    Test("I love Bill's clothes",**kwargs)
+    Test("I love its cool clothes",**kwargs)
+    Test("We have no information on whether users are at risk",**kwargs)
+    Test("They heard about your missing classes",**kwargs)
+    Test("We're annoyed let's face it",**kwargs)
+    Test("He says that you like to swim",**kwargs)
+    Test("I am certain that he did it",**kwargs)
+    Test("I admire the fact that you are honest",**kwargs)
+#    Test("What she said is not true",**kwargs)
+#    Test("What she said is totally not true",**kwargs)
+    Test("She said what is true",**kwargs)
+    Test("I ate the cow, and killed the chicken",**kwargs)
+    Test("I ate the cow, and didn't kill the chicken",**kwargs)
+    Test("I didn't eat the cow, and killed the chicken",**kwargs)
+    Test("I didn't eat the cow, or kill the chicken",**kwargs)
+    Test("I heard it's a dog",**kwargs)
+    Test("Go fuck yourself!") # needs '!' to understand its a command, wont print '!,
+    Test("Fuck yourself",**kwargs)
+    Test("If I were a cat I would be cute",**kwargs)
+    Test("This plan truely helps the middle class",**kwargs)
+    Test("Members of both parties have told me so",**kwargs)
+    Test("I will send this Congress a budget filled with ideas that are practical in two weeks",**kwargs)
+    Test("Each year a tight family should save 15 dollars at the pump",**kwargs)
+    Test("Each year a tight family, a freak, should save 15 dollars at the pump",**kwargs)
+    Test("I want our actions to tell every child in every neighborhood, your life matters, and we are as committed to improving your life chances, as we are for our own kids",**kwargs)
+    Test("I am a really cool cat",**kwargs)
+    Test("I quickly ate the dog",**kwargs)
+    Test("I am really cool",**kwargs)
+    Test("There is a ghost in the room",**kwargs)
+    Test("There is no place that does not see you for here",**kwargs)
+    Test("Yes, passions fly still, but we can surely overcome our differences",**kwargs)
+    Test("We're slashing the backlog",**kwargs)
+    Test("She looks very beautiful",**kwargs)
+    Test("We are as good as ever",**kwargs)
+    Test("I want just one",**kwargs)
+    Test("I want more than one",**kwargs)
+    Test("He cried because of you",**kwargs)
+    Test("I have 3.2 billion dollars",**kwargs)
+    Test("It's not what keeps us strong",exempt=["nsubj"],**kwargs)
+    Test("It isn't what keeps us strong",**kwargs)
+    Test("She is working as hard as ever, but has to forego vacations",**kwargs)
+    Test("We are any better off",**kwargs)
+    Test("It's not like all republicans were sent here to do stuff",exempt=["nsubj"],**kwargs)
+    Test("It's not like all republicans were sent here to do what they want",exempt=["dobj","nsubj"],**kwargs)
+    Test("The schroeder bank allegedly helped marines recover from acl surgery", **kwargs)
+    Test("So eager were they to come that some are said to float over on tree-trunks.", **kwargs)
+    Test("So eager were they to come that some are said to have floated over on tree-trunks.", **kwargs)
+    Test("So eager were tens of thousands of people to come that some are said to float over on tree-trunks.", **kwargs)
+    Test("he changed my life, but would not have liked it", **kwargs)
+    Test("I would not have done that", **kwargs)
+    Test("Joseph's taste for blood has been well established",**kwargs)
+    Test("Hundreds, and hundreds, of thousands gathered around the door", **kwargs)
+    Test("Tens of thousands of people gathered around the door", **kwargs)
+    Test("The Indiana freedom bill is bad", **kwargs)
     
 def Reset(con, user):
     con.query("drop table %s_dependencies" % user)
@@ -633,11 +681,8 @@ def RandomWeightedChoice(choices):
         upto += w
     assert False, choices
 
-# This can be optimized a few ways:
-#    1) If we arent adding new data, the subselect without the where or group by could be materialized and given a key(dependant, dependant_id, arctype, sentence_id) or something
-#    2) Not doing the join at all since we only use it to fill in the nulls for leaf nodes and get the grandparent arctype.
-#        both of these things could be added to the original table for only increase in rowcount and columnsize
-#        Then the only key we'd need is the one mentioned above
+# this function find a all sentences containing a given word under a given arctype
+# 
 def HistogramSubsets(con, word, parent_arctype = None, fixed_arc= None, fixed_word = None, user = None, **kwargs):
     subs =  ("select dl.sentence_id as sid, dl.dependant_id as did, group_concat(dr.arctype separator ',') as gc "
              "from %s_dependencies dl left join %s_dependencies dr "
@@ -656,8 +701,12 @@ def HistogramSubsets(con, word, parent_arctype = None, fixed_arc= None, fixed_wo
         extra_cond += ("and dl.arctype = '%s'" % parent_arctype)
     subs = subs % (user, user, extra_cond)
     q = subs
-    hists = [([] if r["gc"] is None else r["gc"].split(","),r["sid"],r["did"]) for r in con.query(q, *params)]
+    hists = [( ([] if r["gc"] is None else r["gc"].split(",")),
+               r["sid"],
+               r["did"]) 
+             for r in con.query(q, *params)]
     disallowed = ["cc"]
+    disallowed.extend(["num","number"]) # this will add some stability for now...
     if len(hists) == 0:
         assert False,  "before filtering no rows"
     hists = [h for h in hists if len([x for x in h[0] if x in disallowed]) == 0]
@@ -675,8 +724,8 @@ def SubsetSelector(con, word, fixed_arc=None, fixed_word = None,height=0, user=N
         assert False,  "generated no rows"
         return []
     for i in xrange(len(hist)):
-        denom = 1.0 if height == 0 else (params["height_throttler"] * float(height))**len(hist[i][0])
-        hist[i] = (hist[i], 1.0/denom)
+        denom = float(len(hist[i][0])) if height == 0 else (params["height_throttler"] * float(height))**len(hist[i][0])
+        hist[i] = (hist[i], 0 if denom == 0 else (1.0/denom))
     result_entry = RandomWeightedChoice(hist)
     q = "select * from %s_dependencies where sentence_id = %s and governor_id = %s" % (user, result_entry[1], result_entry[2])
     result = [(r["arctype"], r["dependant"]) for r in con.query(q)]
@@ -764,7 +813,7 @@ def GenerateAndExpand(user, using=None):
     con.query("use artrat")
     dbg_out = { "used_list" : [] }
     result = FromDependTree(Generate(con, user, using=using,dbg_out=dbg_out))
-    print "sentences_used" , set(dbg_out["used_list"])
+    print "sentences_used" , dbg_out["used_list"]
     print g_last_generated
     return result
 
@@ -781,6 +830,12 @@ def GenerateWithSymbols(con, user, symbols):
     syms = GetImportantWords(DependTree("root", [("root",result)]), { "words" : []})
     return result, syms
     
+def SentenceIdDependTree(user,sid, con):
+    rows = con.query("select arctype, governor, dependant, governor_id, dependant_id from %s_dependencies where sentence_id = %d" % (user,sid))
+    deps = [(r["arctype"], r['governor'] + "-" + r['governor_id'], r['dependant'] + "-" + r['dependant_id']) for r in rows]
+    return ToDependTree(deps, root='root-0')
+
+
 def PrintSentences(user,sids):
     for s in sids:
         PrintSentence(user,s)
@@ -790,6 +845,7 @@ def PrintSentence(user,sid):
     con = database.ConnectToMySQL()
     con.query("use artrat")
     print con.query("select * from %s_sentences where id = %d" % (user,sid))[0]['sentence']
+    print SentenceIdDependTree(user,sid, con)
 
 def GetImportantWords(parsetree, nlp):
     root = parsetree.Child(parsetree.Find("root"))
