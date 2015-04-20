@@ -683,25 +683,22 @@ def RandomWeightedChoice(choices):
 
 # this function find a all sentences containing a given word under a given arctype
 # 
-def HistogramSubsets(con, word, parent_arctype = None, fixed_arc= None, fixed_word = None, user = None, **kwargs):
-    subs =  ("select dl.sentence_id as sid, dl.dependant_id as did, group_concat(dr.arctype separator ',') as gc "
+def HistogramSubsets(con, word, parent_arctype = None, fixed_siblings=[], user = None, **kwargs):
+    subs =  ("select dl.sentence_id as sid, dl.dependant_id as did, "
+             "group_concat(dr.arctype separator ',')   as gc_arc "
+             "group_concat(dr.dependant separator ',') as gc_dep "
              "from %s_dependencies dl left join %s_dependencies dr "
              "on dl.sentence_id = dr.sentence_id and dl.dependant_id = dr.governor_id "
              "where dl.dependant = %%s %s "
              "group by dl.sentence_id, dl.dependant_id ")
     extra_cond = ""
     params = [word]
-    if not fixed_arc is None:
-        assert not fixed_word is None
-        extra_cond = ("and ('%s',%%s) in (select arctype, dependant from %s_dependencies where "
-                      "sentence_id = dl.sentence_id and governor_id = dl.dependant_id) ")
-        extra_cond = extra_cond % (fixed_arc, user)
-        params.append(fixed_word)
     if not parent_arctype is None:
         extra_cond += ("and dl.arctype = '%s'" % parent_arctype)
     subs = subs % (user, user, extra_cond)
     q = subs
-    hists = [( ([] if r["gc"] is None else r["gc"].split(",")),
+    hists = [( ([] if r["gc_arc"] is None else r["gc_arc"].split(",")),
+               ([] if r["gc_dep"] is None else r["gc_dep"].split(",")),
                r["sid"],
                r["did"]) 
              for r in con.query(q, *params)]
@@ -709,17 +706,17 @@ def HistogramSubsets(con, word, parent_arctype = None, fixed_arc= None, fixed_wo
     disallowed.extend(["num","number"]) # this will add some stability for now...
     if len(hists) == 0:
         assert False,  "before filtering no rows"
-    hists = [h for h in hists if len([x for x in h[0] if x in disallowed]) == 0]
-    hists = [h for h in hists if len([x for x in h[0] if x == "nsubj"]) < 2] # i simple cant even
-    return hists
+    result = []
+    for h in hists:
+        assert len(h[0]) == len(h[1])
+        if len([x for x in h[0] if x in disallowed]) == 0 and len([x for x in h[0] if x == "nsubj"]) < 2:
+            result.append((zip(h[0],[1]), h[2], h[3]))
+    return h
 
 def SubsetSelector(con, word, fixed_arc=None, fixed_word = None,height=0, user=None, params = None, dbg_out={}, **kwargs):
     if params is None:
         params = DEFAULT_PARAMS
-    hist = HistogramSubsets(con, word, user=user, fixed_arc = fixed_arc, fixed_word = fixed_word, **kwargs)
-    if not fixed_arc is None:
-        for h in hist:
-            assert fixed_arc in h[0]
+    hist = HistogramSubsets(con, word, user=user, fixed_siblings=[(fixed_arc,fixed_word)], **kwargs)
     if len(hist) == 0:
         assert False,  "generated no rows"
         return []
