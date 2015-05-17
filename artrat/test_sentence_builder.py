@@ -2,6 +2,8 @@ from sentence_builder import Test
 import sentence_builder as sb
 
 reload(sb)
+reload(sb.rr)
+reload(sb.deptree)
 
 transforms = [("dobj","tens of thousands of people"),
               ("nsubj","tens of thousands of people")]
@@ -95,8 +97,8 @@ def TestAll(**kwargs):
 #    Test("What we are dealing with here is an internationally organized crime syndicate.",**kwargs)
     Test("Since your doctor is going to be asking about your habits ; he should ask, if you are cool",**kwargs)
     Test("To be fair asking a child about your habits would be cruel",**kwargs)
-    #    sb.Test("There is no book that you bought")
-    # Test("Huey was however an unknown human potential that they couldn't control", **kwargs)
+    Test("There is no book that you bought",**kwargs)
+#    Test("Huey was however an unknown human potential that they couldn't control", **kwargs)
     
 def XCompProblemTest():
     con = sb.database.ConnectToMySQL()
