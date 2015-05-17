@@ -132,7 +132,6 @@ class Connection(object):
             query = query % tuple([self._db.escape(p, self.encoders) for p in parameters])
         if isinstance(query, unicode):
             query = query.encode(self._db.character_set_name())
-
         self._db.query(query)
         self._rowcount = self._db.affected_rows()
 
