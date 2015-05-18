@@ -137,12 +137,12 @@ def ProcessDependencies(con, user, depsa, source=None, log=Print):
         deps = deps["dependencies"]
         failed = False
         for at, gv, dp in deps:
-            values = [sid, "'%s'" % at, "%s",  "%s", remove_word(gv), remove_word(dp)]
+            values = [sid, "'%s'" % at, "%s",  "%s", deptree.remove_word(gv), deptree.remove_word(dp)]
             q = "insert into %s_dependencies values (%s)" % (user,",".join(values))
             try:
                 con.query(q.encode("utf8"),
-                          remove_id(gv).lower().encode("utf8"),
-                          remove_id(dp).lower().encode("utf8"))
+                          deptree.remove_id(gv).lower().encode("utf8"),
+                          deptree.remove_id(dp).lower().encode("utf8"))
             except Exception as e:
                 log("insert dep error " + str(e))
                 con.query("delete from %s_sentences where id = %s" % (user,sid))

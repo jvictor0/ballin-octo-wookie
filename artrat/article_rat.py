@@ -25,22 +25,26 @@ def RefreshArticles(domain, directory, personality, log=Print, timeout=None):
         if not timeout is None and time.time() - start_time > timeout:
             log("Timeout after %f secons" % (time.time() - start_time))
             return
-        hashd_fn = hashlib.sha256(unidecode(art.url)).hexdigest()
-        base_fn = directory + "/" + hashd_fn
-        orig_fn = base_fn + "_original"
-        if not os.path.isfile(orig_fn):
+        DownloadAndProcess(url, directory, personality, log=log)
+        
+def DownloadAndProcess(url, directory, personality, log=Print):
+    art = np.Article(url)
+    hashd_fn = hashlib.sha256(unidecode(art.url)).hexdigest()
+    base_fn = directory + "/" + hashd_fn
+    orig_fn = base_fn + "_original"
+    if not os.path.isfile(orig_fn):
+        try:
             art.download()
             log(art.url)
-            try:
-                extractor = Extractor(extractor='ArticleSentencesExtractor', html=art.html)
-            except Exception as e:
-                log(str(e))
-                continue
-            with open(orig_fn,"w") as f:
-                text = unidecode(extractor.getText())
-                print >>f, text
-            result = Process(directory, hashd_fn, personality, log=log)
-            assert result["success"], result
+            extractor = Extractor(extractor='ArticleSentencesExtractor', html=art.html)
+        except Exception as e:
+            log(str(e))
+            return
+        with open(orig_fn,"w") as f:
+            text = unidecode(extractor.getText())
+            print >>f, text
+        result = Process(directory, hashd_fn, personality, log=log)
+        assert result["success"], result
 
 def VirginProcess(directory, filename, personality, log=Print):
     fn = directory + "/" + filename
