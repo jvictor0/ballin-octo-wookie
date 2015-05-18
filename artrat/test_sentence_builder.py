@@ -1,9 +1,11 @@
 from sentence_builder import Test
 import sentence_builder as sb
 
+print "RELOAD"
 reload(sb)
-reload(sb.rr)
+reload(sb.rr.deptree)
 reload(sb.deptree)
+reload(sb.deptree.rr)
 
 transforms = [("dobj","tens of thousands of people"),
               ("nsubj","tens of thousands of people")]
@@ -30,9 +32,9 @@ def TestAll(**kwargs):
     Test("The crazy, and not cute, dog is not awesome",**kwargs)
     Test("The not crazy, and not cute, dog is not awesome",**kwargs)
     Test("The not crazy, but cute, dog is not awesome",**kwargs)
-    Test("The dog that mother ate is cute",exempt=["dobj"], **kwargs)
-    Test("I saw the book which you bought",**kwargs)
-    Test("I saw the book which you bought in the attic",**kwargs)
+    Test("The dog, that mother ate, is cute",exempt=["dobj"], **kwargs)
+    Test("I saw the book, which you bought",**kwargs)
+    Test("I saw the book, which you bought, in the attic",**kwargs)
     Test("They shut down the station",**kwargs)
     Test("He purchased it without paying a premium",**kwargs)
     Test("I saw a cat with a telescope",**kwargs)
@@ -46,8 +48,7 @@ def TestAll(**kwargs):
     Test("He says that you like to swim",**kwargs)
     Test("I am certain that he did it",**kwargs)
     Test("I admire the fact that you are honest",**kwargs)
-#    Test("What she said is not true",**kwargs)
-#    Test("What she said is totally not true",**kwargs)
+    Test("What she said is not true",**kwargs)
     Test("She said what is true",**kwargs)
     Test("I ate the cow, and killed the chicken",**kwargs)
     Test("I ate the cow, and didn't kill the chicken",**kwargs)
@@ -56,10 +57,10 @@ def TestAll(**kwargs):
     Test("I heard it's a dog",**kwargs)
     Test("Go fuck yourself!") # needs '!' to understand its a command, wont print '!,
     Test("Fuck yourself",**kwargs)
-    Test("If I were a cat I would be cute",**kwargs)
+    Test("I would be cute, if I were a cat",**kwargs)
     Test("This plan truely helps the middle class",**kwargs)
     Test("Members of both parties have told me so",**kwargs)
-    Test("I will send this Congress a budget filled with ideas that are practical in two weeks",**kwargs)
+    Test("I will send this Congress a budget filled with ideas, that are practical in two weeks",**kwargs)
     Test("Each year a tight family should save 15 dollars at the pump",**kwargs)
     Test("Each year a tight family, a freak, should save 15 dollars at the pump",**kwargs)
     Test("I want our actions to tell every child in every neighborhood, your life matters, and we are as committed to improving your life chances, as we are for our own kids",**kwargs)
@@ -67,9 +68,9 @@ def TestAll(**kwargs):
     Test("I quickly ate the dog",**kwargs)
     Test("I am really cool",**kwargs)
     Test("There is a ghost in the room",**kwargs)
-    Test("There is no place that does not see you for here",**kwargs)
-    Test("There is no place that sees you for here",**kwargs)
-#    Test("Yes, passions fly still, but we surely can overcome our differences",**kwargs)
+    Test("There is no place, that does not see you for here",**kwargs)
+    Test("There is no place, that sees you for here",**kwargs)
+    Test("Yes, passions fly still, but we surely can overcome our differences",**kwargs)
     Test("We're slashing the backlog",**kwargs)
     Test("She looks very beautiful",**kwargs)
     Test("We are as good as ever",**kwargs)
@@ -94,11 +95,11 @@ def TestAll(**kwargs):
     Test("Hundreds, and hundreds, of thousands gathered around the door", **kwargs)
     Test("Tens of thousands of people gathered around the door", **kwargs)
     Test("The Indiana freedom bill is bad", **kwargs)
-#    Test("What we are dealing with here is an internationally organized crime syndicate.",**kwargs)
-    Test("Since your doctor is going to be asking about your habits ; he should ask, if you are cool",**kwargs)
+    Test("What we are dealing with here is an internationally organized crime syndicate.",**kwargs)
+    Test("Since your doctor is going to be asking about your habits; he should ask, if you are cool",**kwargs)
     Test("To be fair asking a child about your habits would be cruel",**kwargs)
     Test("There is no book that you bought",**kwargs)
-#    Test("Huey was however an unknown human potential that they couldn't control", **kwargs)
+    Test("Huey was however an unknown human potential that they couldn't control", **kwargs)
     
 def XCompProblemTest():
     con = sb.database.ConnectToMySQL()

@@ -162,19 +162,26 @@ def ToDependTree(triplets,root):
     return DependTree(root,children)
 
 def FixPunctuation(sentence):
-    sentence = sentence.strip(" ,")
-    while True:
-        old_sentence = sentence
-        sentence = sentence.replace(" ,",",")
-        sentence = sentence.replace(",,",",")
-        if old_sentence == sentence:
-            break
+    puncts = [',',';']
+    for p in puncts:
+        sentence = sentence.strip(" " + p)
+        while True:
+            old_sentence = sentence
+            sentence = sentence.replace(" " + p, p)
+            for q in puncts:
+                sentence = sentence.replace(q+p,p)
+            if old_sentence == sentence:
+                break
     return sentence
 
 def FromDependTree(dt, verbose=False,printres=False):
+    if verbose: print "** Structural Pre ***"
     dt.Rewrite(rr.StructuralPreRules,verbose=verbose)
+    if verbose: print "*** STRUCTURAL ***"
     dt.Rewrite(rr.StructuralRules,verbose=verbose)
+    if verbose: print "*** PRE ***"
     dt.Rewrite(rr.PreRules,verbose=verbose)
+    if verbose: print "*** RULES ***"
     dt.Rewrite(rr.Rules,verbose=verbose)
     if printres:
         print dt

@@ -13,7 +13,7 @@ def PrepRW(t):
         if not "_" in t.children[i][0]:
             continue
         tp = t.children[i][0].split("_")[0]
-        if tp in ["prep","prepc","rcmod"]:
+        if tp in ["prep","prepc"]:
             CHECK(t.Child(i).IsLeaf())
             neg = False
             if tp == "prep":
@@ -59,20 +59,18 @@ def CompSentRW(t):
     t.Postpend(-1, t.Find("ccomp"))
     return t
     
-def RCModRW(t):
-    rcm = t.FindOne(["rcmod"])
-    rcmobj = t.Child(rcm).Find("dobj")
-    t.Child(rcm).CheckOrder("dobj","nsubj")
-    CHECK(t.Child(rcm).Child(rcmobj).IsLeaf())
-    t.children[rcm] = ("rcmod_" + t.Child(rcm).ChildStr(rcmobj),t.children[rcm][1])
-    t.Child(rcm).Pop(rcmobj)
-    return t
+def ObjFirst(t):
+    dobj = t.Find("dobj")
+    nsubj = t.Find("nsubj")
+    t.CheckOrder("dobj","nsubj")
+    CHECK(t.Child(dobj).IsLeaf())
+    CHECK(t.Child(nsubj).IsLeaf())
+    t.Prepend(nsubj, dobj)
 
 def XCompCCompObjRW(t):
     xcomp = t.Find("xcomp")
     ccomp = t.Child(xcomp).Find("ccomp")
     dobj  = t.Child(xcomp).Child(ccomp).Find("dobj")
-#    t.Child(xcomp).Child(ccomp).CheckAbsense("aux")
     CHECK(t.Child(xcomp).Child(ccomp).Child(dobj).IsLeaf())
     children = t.Child(xcomp).Child(ccomp).children
     children[dobj] = ("mark",children[dobj][1])
@@ -229,7 +227,6 @@ StructuralRules = [
 
     ]
 PreRules = [
-    RCModRW,
     AdvmodAmodFn(False),
     XCompCCompObjRW,
     ]
@@ -254,6 +251,7 @@ Rules = [
     br("pcomp",False),
     PossRW,
     br("dep",False),
+    ObjFirst,
 #    CompSentRW,
     br("iobj",False),
     br("dobj",False),
@@ -263,7 +261,7 @@ Rules = [
     br("preconj",True),
     ExplSubjRW,
     br("ccomp",False),
-    br("rcmod",False),
+    br("rcmod",False,prefix=", ",suffix=","),
     PrepRW,
     br("pobj",False),
     br("neg", True),
