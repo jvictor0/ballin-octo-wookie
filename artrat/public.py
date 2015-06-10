@@ -1,5 +1,6 @@
 import sentence_builder as sb
 import database
+import depend_tree as deptree
 
 def Ingest(user, text):
     con = database.ConnectToMySQL()
@@ -22,13 +23,13 @@ def IngestFile(user, text, log=sb.Print):
         con.query("rollback")
         return { "success": False, "error": str(e) }
 
-def Generate(user, symbols):
+def Generate(user, symbols, requireSymbols=False):
     con = database.ConnectToMySQL()
     con.query("use artrat")
     dbs = {}
     try:
-        gend, syms = sb.GenerateWithSymbols(con, user, symbols)
-        result = sb.FromDependTree(gend)
+        gend, syms = sb.GenerateWithSymbols(con, user, symbols,requireSymbols=requireSymbols)
+        result = deptree.FromDependTree(gend)
         dbs = {} #sb.g_last_generated.ToDict()
         return { "success": True,   "body": result, "debugging_stuff" : { "original_tree" : dbs }, "symbols" : syms }
     except Exception as e:

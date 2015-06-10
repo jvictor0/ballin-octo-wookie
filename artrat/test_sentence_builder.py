@@ -99,8 +99,9 @@ def TestAll(**kwargs):
     Test("Since your doctor is going to be asking about your habits; he should ask, if you are cool",**kwargs)
     Test("To be fair asking a child about your habits would be cruel",**kwargs)
     Test("There is no book that you bought",**kwargs)
-    Test("Huey was however an unknown human potential that they couldn't control", **kwargs)
-    
+    Test("Huey was however an unknown human potential that they couldn't control", **kwargs) 
+    #Test("What is really going on with the dog", **kwargs)   
+
 def XCompProblemTest():
     con = sb.database.ConnectToMySQL()
     con.query("use artrat")

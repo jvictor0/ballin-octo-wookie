@@ -16,8 +16,8 @@ class DependTree:
 
     def Print(self,indentation, typ):
         if self.IsLeaf():
-            return "(" + (typ + " " if typ != "" else "") + "\"" + self.data + "\")"
-        prefix = "(" + (typ + " " if typ != "" else "") + "\"" + self.data + "\" "
+            return "(" + (typ + " " if typ != "" else "") + "\"" + str(self.data) + "\")"
+        prefix = "(" + (typ + " " if typ != "" else "") + "\"" + str(self.data) + "\" "
         nid = indentation + (" " * len(prefix))
         body = "\n".join([(nid if i > 0  else "") + self.children[i][1].Print(nid,self.children[i][0])
                           for i in xrange(len(self.children))])

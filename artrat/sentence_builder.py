@@ -68,9 +68,9 @@ def DDL(con, user):
     con.query("use artrat")
     con.query(("create table if not exists %s_dependencies"
                "(sentence_id bigint"
-               ",arctype varchar(255) charset utf8mb4 not null"
-               ",governor varchar(255) charset utf8mb4  not null"
-               ",dependant varchar(255) charset utf8mb4  not null"
+               ",arctype varbinary(255)"
+               ",governor varbinary(255)"
+               ",dependant varbinary(255)"
                ",governor_id int not null"
                ",dependant_id int not null"
                ",primary key(sentence_id,dependant_id)"
@@ -79,8 +79,8 @@ def DDL(con, user):
                ")") % user)
     con.query(("create table if not exists %s_sentences"
                "(id bigint primary key auto_increment"
-               ",sentence text charset utf8mb4"
-               ",source text default null)") % user)
+               ",sentence blob"
+               ",source blob default null)") % user)
     con.query("create table if not exists %s_procd like %s_dependencies" % (user,user))
 
 def UpdateProcd(con, user):
@@ -130,7 +130,6 @@ def ProcessDependencies(con, user, depsa, source=None, log=Print):
                 sid = str(con.execute("insert into %s_sentences(sentence) values(%%s)" % (user), txt))
             else:
                 sid = str(con.execute("insert into %s_sentences(sentence,source) values(%%s,%%s)" % (user), txt, unidecode(source)))
-            log("inserting (%s), sentence_id = %s" % (user,sid))
         except Exception as e:
             log("insert sentence error " + str(e))
             continue
@@ -145,11 +144,14 @@ def ProcessDependencies(con, user, depsa, source=None, log=Print):
                           deptree.remove_id(dp).lower().encode("utf8"))
             except Exception as e:
                 log("insert dep error " + str(e))
+                log("%s %s %s" % (q.encode("utf8"),
+                                  deptree.remove_id(gv).lower().encode("utf8"),
+                                  deptree.remove_id(dp).lower().encode("utf8")))
                 con.query("delete from %s_sentences where id = %s" % (user,sid))
                 con.query("delete from %s_dependencies where sentence_id = %s" % (user,sid))
                 failed = True
                 break
-        if not failed:            
+        if not failed: 
             PostProcessSentence(con, int(sid), user)
 
             
@@ -179,9 +181,11 @@ def Ingest(con, text, user):
 
 def IngestFile(con, filename, user, log=Print):
     result = corenlp.ParseAndSaveFile(filename)
+    log("begin xact")
     con.query("begin")
     try:        
         ProcessDependencies(con, user, result["sentences"], filename, log=log)
+        log("commit xact")
         con.query("commit")
     except Exception:
         con.query("rollback")
@@ -221,6 +225,7 @@ def HistogramSubsets(con, word, parent_arctype = None, fixed_siblings=deptree.De
         extra_cond += ("and dl.arctype = '%s'" % parent_arctype)
     subs = subs % (user, user, extra_cond)
     q = subs
+    t0 = time.time()
     hists = [( ([] if r["gc_arc"] is None else r["gc_arc"].split(",")),
                ([] if r["gc_dep"] is None else r["gc_dep"].split(",")),
                r["sid"],
@@ -232,7 +237,7 @@ def HistogramSubsets(con, word, parent_arctype = None, fixed_siblings=deptree.De
         assert False,  "before filtering no rows"
     result = []
     assert fixed_siblings.data is None
-    fixed_tups = [(fs[0], fs[1].data) for fs in fixed_siblings.children if False]
+    fixed_tups = [(fs[0], fs[1].data) for fs in fixed_siblings.children]
     for h in hists:
         assert len(h[0]) == len(h[1])
         if len([x for x in h[0] if x in disallowed]) == 0 and len([x for x in h[0] if x == "nsubj"]) < 2:
@@ -340,11 +345,12 @@ def Generate(con, user, using=None, dbg_out={}):
         if fixed_chain.data is None:
             return None
         word = fixed_chain.data
+        fixed_chain.data = None
     else:
         fixed_chain = deptree.DependTree(None)
         word = random.choice(con.query("select dependant from %s_procd where arctype = 'root'" % user))['dependant']
     global g_last_generated
-    result = Expand(con, word, parent_arctype='root', user=user, fixed_chain=fixed_chain,dbg_out=dbg_out)
+    result = Expand(con, word, parent_arctype='root', user=user, fixed_siblings=fixed_chain,dbg_out=dbg_out)
     g_last_generated = copy.deepcopy(result)
     return result
 
@@ -357,18 +363,18 @@ def GenerateAndExpand(user, using=None):
     print g_last_generated
     return result
 
-def GenerateWithSymbols(con, user, symbols):
+def GenerateWithSymbols(con, user, symbols, requireSymbols=False):
     symbols = { k.encode("utf8") : v for k,v in symbols.iteritems() }
     while len(symbols) != 0:
         using = RandomWeightedChoice(symbols.items())
         del symbols[using]
         result = Generate(con, user, using)
         if not result is None:
-            syms = GetImportantWords(deptree.DependTree("root", [("root",result)]), { "words" : []})
-            return result, syms
+            return result, using
+    if requireSymbols:
+        raise Exception("cannot build sentence with provided symbols")
     result = Generate(con, user, None)
-    syms = GetImportantWords(deptree.DependTree("root", [("root",result)]), { "words" : []})
-    return result, syms
+    return result, None
     
 def SentenceIdDependTree(user,sid, con):
     rows = con.query("select arctype, governor, dependant, governor_id, dependant_id from %s_dependencies where sentence_id = %d" % (user,sid))

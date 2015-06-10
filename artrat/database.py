@@ -19,9 +19,9 @@ import time
 import sys
 import collections
 
-def ConnectToMySQL(host=None, user='root', database='', **kwargs):
+def ConnectToMySQL(host=None, port=3307, user='root', database='', **kwargs):
     if not host:
-        host = '%s:%s' % ("127.0.0.1", 3306)
+        host = '%s:%s' % ("127.0.0.1", port)
     db = Connection(host=host, user=user, database=database, **kwargs)
     return db
 
