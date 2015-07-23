@@ -5,6 +5,7 @@ import os, time, random
 from unidecode import unidecode
 import public
 import hashlib
+from subprocess import call
 
 def Print(x):
     print x
@@ -48,14 +49,14 @@ def DownloadAndProcess(url, directory, personality, log=Print):
 
 def VirginProcess(directory, filename, personality, log=Print):
     fn = directory + "/" + filename
-    os.system("mv '%s' '%s'" % (fn, fn + "_original"))
+    call("mv '%s' '%s'" % (fn, fn + "_original"), shell=True)
     Process(directory, filename, personality, log=log)
 
 def Process(directory, filename, personality, log=Print):
     fn = directory + "/" + filename + "_original"
     outfn = directory + "/" + filename + "_processed"
-    os.system("cp '%s' '%s'" % (fn, outfn))
-    os.system("sed -i 's/\[[0-9]*\]//g' '" + outfn + "'")
+    call("cp '%s' '%s'" % (fn, outfn), shell=True)
+    call("sed -i 's/\[[0-9]*\]//g' '" + outfn + "'", shell=True)
     return public.IngestFile(personality, outfn, log=log)
 
 def Reset(directory, personality, log=Print):

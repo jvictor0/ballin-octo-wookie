@@ -25,6 +25,7 @@ import jsonrpc, pexpect
 from progressbar import ProgressBar, Fraction
 import logging
 import unidecode
+from subprocess import call
 
 VERBOSE = False
 
@@ -259,7 +260,7 @@ class StanfordCoreNLP(object):
 def ParseAndSaveFile(filename):
     if not os.path.isfile(filename + ".parsed"):
         shellout = "cat '%s' | %s  >> '%s.parsed'" % (filename, start_corenlp, filename)
-        os.system(shellout)
+        call(shellout, shell=True)
     with open (filename + ".parsed", "r") as f:
         data=f.read().decode("utf8")
     return parse_parser_results(unidecode.unidecode(data))
