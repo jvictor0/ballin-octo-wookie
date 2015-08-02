@@ -1,6 +1,8 @@
 import sentence_builder as sb
 import database
 import depend_tree as deptree
+import sys
+import traceback
 
 def Ingest(user, text):
     con = database.ConnectToMySQL()
@@ -30,9 +32,11 @@ def Generate(user, symbols, requireSymbols=False):
     try:
         gend, syms = sb.GenerateWithSymbols(con, user, symbols,requireSymbols=requireSymbols)
         result = deptree.FromDependTree(gend)
-        dbs = {} #sb.g_last_generated.ToDict()
+        dbs = sb.g_last_generated.ToDict()
         return { "success": True,   "body": result, "debugging_stuff" : { "original_tree" : dbs }, "symbols" : syms }
     except Exception as e:
+        ex_type, ex, tb = sys.exc_info()
+        # traceback.print_tb(tb)
         return { "success": False, "error": str(e), "debugging_stuff" : { "original_tree" : dbs } }
 
 def Reset(user):

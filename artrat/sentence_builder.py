@@ -74,8 +74,10 @@ def DDL(con, user):
                ",governor_id int not null"
                ",dependant_id int not null"
                ",primary key(sentence_id,dependant_id)"
+               ",shard(sentence_id)"
                ",key(governor, governor_id)" 
-               ",key(dependant, dependant_id)"
+               ",key(dependant, arctype, dependant_id)"
+               ",key(sentence_id,governor_id)"
                ")") % user)
     con.query(("create table if not exists %s_sentences"
                "(id bigint primary key auto_increment"
@@ -199,7 +201,7 @@ def RandomWeightedChoice(choices):
         if upto + w > r:
             return c
         upto += w
-    assert False, choices
+    assert False, ("RandomWeightedChoice",choices)
 
 def Subset(superset,subset):
     for elem in set(subset):
@@ -213,8 +215,9 @@ def Subset(superset,subset):
 # 
 def HistogramSubsets(con, word, parent_arctype = None, fixed_siblings=deptree.DependTree(None), user = None, **kwargs):
     subs =  ("select dl.sentence_id as sid, dl.dependant_id as did, "
-             "group_concat(dr.arctype separator ',')   as gc_arc, "
-             "group_concat(dr.dependant separator ',') as gc_dep "
+             "group_concat(dr.arctype separator '___')   as gc_arc, "
+             "group_concat(dr.dependant separator '___') as gc_dep, "
+             "count(dr.dependant) as groupsize "
              "from %s_procd dl left join %s_procd dr "
              "on dl.sentence_id = dr.sentence_id and dl.dependant_id = dr.governor_id "
              "where dl.dependant = %%s %s "
@@ -225,12 +228,17 @@ def HistogramSubsets(con, word, parent_arctype = None, fixed_siblings=deptree.De
         extra_cond += ("and dl.arctype = '%s'" % parent_arctype)
     subs = subs % (user, user, extra_cond)
     q = subs
-    t0 = time.time()
-    hists = [( ([] if r["gc_arc"] is None else r["gc_arc"].split(",")),
-               ([] if r["gc_dep"] is None else r["gc_dep"].split(",")),
+    t0 = time.time()    
+    qres = con.query(q, *params)
+    maxgroupsize = max([int(r["groupsize"]) for r in qres])
+    if maxgroupsize == 0:
+        qres = [qres[0]]
+    t1 = time.time()
+    hists = [( ([] if r["gc_arc"] is None else r["gc_arc"].split("___")),
+               ([] if r["gc_dep"] is None else r["gc_dep"].split("___")),
                r["sid"],
                r["did"]) 
-             for r in con.query(q, *params)]
+             for r in qres]
     disallowed = ["cc"]
     disallowed.extend(["num","number"]) # this will add some stability for now...
     if len(hists) == 0:
@@ -238,8 +246,9 @@ def HistogramSubsets(con, word, parent_arctype = None, fixed_siblings=deptree.De
     result = []
     assert fixed_siblings.data is None
     fixed_tups = [(fs[0], fs[1].data) for fs in fixed_siblings.children]
+    t2 = time.time()
     for h in hists:
-        assert len(h[0]) == len(h[1])
+        assert len(h[0]) == len(h[1]), h
         if len([x for x in h[0] if x in disallowed]) == 0 and len([x for x in h[0] if x == "nsubj"]) < 2:
             zipd = zip(h[0],h[1])
             if Subset(zipd, fixed_tups):
@@ -260,7 +269,7 @@ def SubsetSelector(con, word, fixed_siblings=deptree.DependTree(None), height=0,
     result_entry = RandomWeightedChoice(hist)
     q = "select * from %s_procd where sentence_id = %s and governor_id = %s" % (user, result_entry[1], result_entry[2])
     result = [(r["arctype"], r["dependant"], r["dependant_id"]) for r in con.query(q)]
-    assert [(a,b) for a,b,c in result] == result_entry[0], (result,result_entry)
+    assert sorted([(a,b) for a,b,c in result]) == sorted(result_entry[0]), "%s\n%s\n%s\n%s" % (result,result_entry)
 
     if "used_list" not in dbg_out:
         dbg_out["used_list"] = []
@@ -276,7 +285,7 @@ def SubsetSelector(con, word, fixed_siblings=deptree.DependTree(None), height=0,
                 result[i] = (at, fs.data, deptree.DependTree(None, fs.children))
                 found = True
                 break
-        assert found, (at,fs.data,result)
+        assert found, ("not found",at,fs.data,result)
     for i in xrange(len(result)):
         if i not in fixed_ixs:
             fixd = deptree.DependTree(None)
@@ -285,7 +294,6 @@ def SubsetSelector(con, word, fixed_siblings=deptree.DependTree(None), height=0,
     for i in xrange(len(result)):
         if result[i][0] in params["arc_wildness"] and random.random() < params["arc_wildness"][result[i][0]]:
             next_word = RandomDependant(con, user, word, result[i][0])
-            print "   (%s) %s -> %s" % (result[i][0], result[i][1], next_word)
             result[i] = (result[i][0], next_word, result[i][2])
     return result
 
@@ -328,13 +336,13 @@ def SeekToRoot(con, user, dependant):
         assert len(rows) != 0
         row = random.choice(rows)
         rows = con.query("select governor, arctype from %s_procd where sentence_id = %s and dependant_id = %s" % (user, row["sid"], row["gid"]))
-        assert len(rows) == 1, rows
+        assert len(rows) == 1, ("SeekToRoot",rows)
         result.append((rows[0]['arctype'], dependant))
         dependant = rows[0]['governor']
-        result_tree = []
+    result_tree = []
     for at, dep in result:
         result_tree = [(at, deptree.DependTree(dep, result_tree))]
-    assert result_tree[0][0] == 'root', result_tree
+    assert result_tree[0][0] == 'root', ("SeekToRoot",result_tree)
     return result_tree[0][1]
 
 g_last_generated = None
