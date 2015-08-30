@@ -4,6 +4,8 @@ import depend_tree as deptree
 import sys
 import traceback
 
+reload(sb)
+
 def Ingest(user, text):
     con = database.ConnectToMySQL()
     con.query("use artrat")
@@ -36,7 +38,7 @@ def Generate(user, symbols, requireSymbols=False):
         return { "success": True,   "body": result, "debugging_stuff" : { "original_tree" : dbs }, "symbols" : syms }
     except Exception as e:
         ex_type, ex, tb = sys.exc_info()
-        # traceback.print_tb(tb)
+        traceback.print_tb(tb)
         return { "success": False, "error": str(e), "debugging_stuff" : { "original_tree" : dbs } }
 
 def Reset(user):
